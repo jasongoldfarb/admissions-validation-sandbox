@@ -4,12 +4,22 @@ A self-contained Python model-validation sandbox exploring **why strong headline
 
 Built as a low-friction **winter-break / New Year's coding sandbox** for data scientists, analysts, and curious builders.
 
+## Empirical Priors & Simulation Grounding
+
+The applicant generator in `src/baseline_repro.py` is anchored to the empirical priors used in **Ray, Padmanabhan, and Bouayad (INFORMS Journal on Computing, `INFORMSJoC/2023.0523`)**:
+- **Subgroup share (NCES):** `1 - 7.8 / 15.4` (~49.4% non-traditional / underrepresented).
+- **SAT distribution (College Board):** Mean `1030`, SD `235`, rounded to the nearest 10.
+- **Equal underlying talent:** Identical academic and non-academic quality distributions (`N(0.5, 0.1)`) across cohorts.
+- **Selectivity threshold:** Top `20%` admit bar (`Tau1 = 20` Tier-1 cutoff).
+
+To test human-in-the-loop escalation at the single-institution level, the sandbox translates the paper's group-level evaluation noise gap into concrete flattened-context variables (school AP caps, outside work/caregiving hours, and upward grade trajectories).
+
 ## Key Findings (Simulated Holdout, N = 3,000)
 
-- **Headline accuracy looks solid:** The baseline screener trained on biased historical admissions data reaches **87.2% overall accuracy** (**89.4%** on traditional applicants, with a **12.3%** wrongful auto-rejection rate).
-- **Subgroup blind spot:** For qualified **non-traditional applicants** (such as students with fewer AP courses offered at their school, heavy outside work/caregiving hours, or upward grade trajectories), the wrongful auto-rejection rate (false negative rate) reaches **67.8%**.
-- **Flattened context:** Many qualified non-traditional applicants get pushed into low predicted-probability buckets (below 0.20) because raw counts (like ATs taken or extracurriculars) miss school caps, outside commitments, and late momentum.
-- **Targeted human escalation:** Pairing a standard [0.20, 0.65] review band for traditional applicants with a lower floor [0.04, 0.65] for non-traditional applicants (assuming **92%** human review accuracy) escalates just **4.9%** of applications (148 of 3,000), cutting non-traditional wrongful auto-rejections from **67.8% to 55.6%** (an **18.0% relative drop**) and lifting overall accuracy from **87.2% to 89.2%** without changing the underlying scoring model.
+- **Headline accuracy looks reassuringâ€”and even deceptive:** The baseline screener trained on biased historical admissions data reaches **82.5% overall accuracy** (**81.8%** on traditional applicants and **83.2%** on non-traditional applicants).
+- **Subgroup blind spot:** Despite higher cohort accuracy, qualified **non-traditional applicants** face a **68.5%** wrongful auto-rejection rate (false negative rate), compared to **12.0%** for traditional applicants.
+- **Flattened context:** **206 of the 230** missed non-traditional candidates get pushed into the lowest predicted-probability bucket (`< 0.20`) because raw counts (APs taken, club leadership, cumulative GPA) miss school AP caps, heavy outside work/caregiving hours, and upward grade trajectories.
+- **Targeted human escalation:** Pairing a standard `[0.20, 0.65]` review band for traditional applicants with a lower floor `[0.04, 0.65]` for non-traditional applicants (assuming **92%** human review accuracy) escalates just **6.4%** of applications (192 of 3,000), cutting non-traditional wrongful auto-rejections from **68.5% to 49.7%** (a **27.4% relative drop**) and lifting overall accuracy from **82.5% to 85.5%** without changing the underlying scoring model.
 
 ## Charts
 
@@ -20,7 +30,7 @@ Built as a low-friction **winter-break / New Year's coding sandbox** for data sc
 ## Quickstart
 
 ```bash
-git clone https://github.com/jasongoldfarb/admissions-validation-sandbox.git
+git clone [https://github.com/jasongoldfarb/admissions-validation-sandbox.git](https://github.com/jasongoldfarb/admissions-validation-sandbox.git)
 cd admissions-validation-sandbox
 pip install -r requirements.txt
 
@@ -34,11 +44,24 @@ python src/make_charts.py
 
 ```text
 admissions-validation-sandbox/
-â”œâ„€â„€ src/
-â”œâ„€â„€   â”œâ„€â„€ baseline_repro.py       # Session 1: Baseline simulation & subgroup metrics
-â”œâ„€â„€   â”œâ„€â„€ audit_borderline.py     # Session 2: Score-zone slice & flattened-context audit
-â”œâ„€â„€   â”œâ„€â„€ escalation_policy.py    # Session 3: Review band + human_review_accuracy simulation
-â”œâ„€â„€   â”œâ„€â„€ make_charts.py          # Session 4: Generate PNG visuals from simulation outputs
-â”œâ„€â„€ outputs/                    # Generated CSVs and PNG charts
-â”œâ„€â„€ requirements.txt
-â”œâ„€â„€I5¹µ)€((ŒŒ€‰QÉäQ¡¥Ì9•áÐˆ]¥¹Ñ•È	É•…¬¡…±±•¹”((Ä¸€¨©Q•ÍÐ¡Õµ…¸É•Ù¥•Ü…ÕÉ…äÍ•¹Í¥Ñ¥Ù¥Ñäè¨¨‘¥Ð¡Õµ…¹}…€¥¸ÍÉŒ½•Í…±…Ñ¥½¹}Á½±¥ä¹Áå€€¡”¹œ¸°€À¸àÕ€ÙÌ¸€À¸äÕ€§ŠQ…ÐÝ¡…Ð¡Õµ…¸É•Ù¥•Ü…ÕÉ…ä‘½•Ì•Í…±…Ñ¥¹œ‰½É‘•É±¥¹”…Í•ÌÍÑ½À¥µÁÉ½Ù¥¹œ½Ù•É…±°…ÕÉ…äü(È¸€¨©!¥‘‘•¸½¹™½Õ¹‘•È€¼=µ¥ÑÑ•Y…É¥…‰±”áÁ•É¥µ•¹Ðè¨¨‘…¸Õ¹µ•…ÍÕÉ•€¨©±•…ä€¼¥¹ÍÑ¥ÑÕÑ¥½¹…°µ™…µ¥±¥…É¥Ñä‰½½ÍÐ¨¨¥¹Ñ¼¡¥ÍÑ½É¥…±}…‘µ¥Ñ€Ý¥Ñ¡½ÕÐ•áÁ½Í¥¹œ¥ÐÑ¼Ñ¡”µ½‘•°¸!½Ü‘½•ÌÑ¡…ÐÍ¡¥™ÐÑ¡”‘•¥Í¥½¸‰½Õ¹‘…Éä…¹¡…¹”Ý¡¥ …ÁÁ±¥…¹ÑÌ±…¹¥¹Í¥‘”½È½ÕÑÍ¥‘”Ñ¡”É•Ù¥•Ü‰…¹ü(Ì¸€¨©…Á…¥Ñäµ½¹ÍÑÉ…¥¹•Í…±…Ñ¥½¸è¨¨MÕÁÁ½Í”¡Õµ…¸…‘µ¥ÍÍ¥½¹ÌÉ•…‘•ÉÌ…¸½¹±äÉ•Ù¥•Ü€¨¨Ô”¨¨½˜Ñ½Ñ…°…ÁÁ±¥…Ñ¥½¹Ì¸•Í¥¸„É…¹­¥¹œ½È½¹Ñ•áÐµÑÉ¥•É•ÉÕ±”Ñ¼Á¥¬€©Ý¡¥ ¨€Ô”•Ð¡Õµ…¸•å•Ì™¥ÉÍÐ¸((ŒŒI•Í•…É ÑÑÉ¥‰ÕÑ¥½¸()Q¡¥ÌÍ…¹‘‰½à¥Ì¥¹ÍÁ¥É•‰ä…¹‰Õ¥±‘ÌÕÁ½¸Ñ¡”ÍåÍÑ•µ¥Œ™…¥É¹•ÍÌÉ•Í•…É …¹½Á•¸µÍ½ÕÉ”Í¥µÕ±…Ñ¥½¸Ý½É¬½˜€¨©É¥¹‘…´I…ä°	…±…©¤A…‘µ…¹…‰¡…¸°…¹1¥¹„	½Õ…å…¨¨è(´€©%9=I5L)½ÕÉ¹…°½¸½µÁÕÑ¥¹œ¨Í¥µÕ±…Ñ¥½¸É•Á½Í¥Ñ½Éäè¡ÑÑÁÌè¼½¥Ñ¡Õˆ¹½´½%9=I5M)½¼ÈÀÈÌ¸ÀÔÈÌ(´€©MåÍÑ•µ¥Œ…¥É¹•ÍÌ¨€¡…Éa¥ØèÈÌÀÐ¸ÀØäÀÅ€¤è¡ÑÑÁÌè¼½…Éá¥Ø¹½Éœ½Á‘˜¼ÈÌÀÐ¸ÀØäÀÄ¹Á‘˜(
+â”œâ”€â”€ src/
+â”‚   â”œâ”€â”€ baseline_repro.py       # Session 1: Baseline simulation (paper priors) & subgroup metrics
+â”‚   â”œâ”€â”€ audit_borderline.py     # Session 2: Score-zone slice & flattened-context audit
+â”‚   â”œâ”€â”€ escalation_policy.py    # Session 3: Review band + human_review_accuracy simulation
+â”‚   â””â”€â”€ make_charts.py          # Session 4: Generate PNG visuals from simulation outputs
+â”œâ”€â”€ outputs/                    # Generated CSVs and PNG charts
+â”œâ”€â”€ requirements.txt
+â””â”€â”€ README.md
+```
+
+## "Try This Next" Winter Break Challenge
+
+1. **Test human review accuracy sensitivity:** Edit `human_acc` in `src/escalation_policy.py` (e.g., `0.85` vs. `0.95`)â€”at what human review accuracy does escalating borderline cases stop improving overall accuracy?
+2. **Hidden Confounder / Omitted Variable Experiment:** Add an unmeasured **legacy / institutional-familiarity boost** into `historical_admit` without exposing it to the model. How does that shift the decision boundary and change which applicants land inside or outside the review band?
+3. **Capacity-Constrained Escalation:** Suppose human admissions readers can only review **5%** of total applications. Design a ranking or context-triggered rule to pick *which* 5% get human eyes first.
+
+## Research Attribution
+
+This sandbox is inspired by and anchored to the empirical priors in the systemic fairness research of **Arindam Ray, Balaji Padmanabhan, and Lina Bouayad**:
+- *INFORMS Journal on Computing* simulation repository: https://github.com/INFORMSJoC/2023.0523
+- *Systemic Fairness* (`arXiv:2304.06901`): https://arxiv.org/pdf/2304.06901.pdf
