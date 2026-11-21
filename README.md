@@ -19,7 +19,7 @@ To test human-in-the-loop escalation at the single-institution level, the sandbo
 - **Headline accuracy looks reassuring—and even deceptive:** The baseline screener trained on biased historical admissions data reaches **82.5% overall accuracy** (**81.8%** on traditional applicants and **83.2%** on non-traditional applicants).
 - **Subgroup blind spot:** Despite higher cohort accuracy, qualified **non-traditional applicants** face a **68.5%** wrongful auto-rejection rate (false negative rate), compared to **12.0%** for traditional applicants.
 - **Flattened context:** **206 of the 230** missed non-traditional candidates get pushed into the lowest predicted-probability bucket (`< 0.20`) because raw counts (APs taken, club leadership, cumulative GPA) miss school AP caps, heavy outside work/caregiving hours, and upward grade trajectories.
-- **Targeted human escalation:** Pairing a standard `[0.20, 0.65]` review band for traditional applicants with a lower floor `[0.04, 0.65]` for non-traditional applicants (assuming **92%** human review accuracy) escalates just **6.4%** of applications (192 of 3,000), cutting non-traditional wrongful auto-rejections from **68.5% to 49.7%** (a **27.4% relative drop**) and lifting overall accuracy from **82.5% to 85.5%** without changing the underlying scoring model.
+- **Cohort-blind, context-triggered escalation:** Routing applicants using **observable educational and life constraints**—applying a lower `[0.04, 0.65]` review floor when a student's school offers `<= 6` APs or they work/caregive `>= 10` hours/week, and `[0.20, 0.65]` otherwise (assuming **92%** human review accuracy)—escalates just **6.4%** of applications (193 of 3,000). Without changing the underlying scoring model, this cuts non-traditional wrongful auto-rejections from **68.5% to 50.0%** (a **27.0% relative drop**), trims traditional wrongful rejections from **12.0% to 8.4%**, and lifts overall accuracy from **82.5% to 85.5%**.
 
 ## Charts
 
@@ -30,7 +30,7 @@ To test human-in-the-loop escalation at the single-institution level, the sandbo
 ## Quickstart
 
 ```bash
-git clone https://github.com/jasongoldfarb/admissions-validation-sandbox.git
+git clone [https://github.com/jasongoldfarb/admissions-validation-sandbox.git](https://github.com/jasongoldfarb/admissions-validation-sandbox.git)
 cd admissions-validation-sandbox
 pip install -r requirements.txt
 
@@ -47,12 +47,18 @@ admissions-validation-sandbox/
 ├── src/
 │   ├── baseline_repro.py       # Session 1: Baseline simulation (paper priors) & subgroup metrics
 │   ├── audit_borderline.py     # Session 2: Score-zone slice & flattened-context audit
-│   ├── escalation_policy.py    # Session 3: Review band + human_review_accuracy simulation
+│   ├── escalation_policy.py    # Session 3: Observable context-proxy review band simulation
 │   └── make_charts.py          # Session 4: Generate PNG visuals from simulation outputs
 ├── outputs/                    # Generated CSVs and PNG charts
 ├── requirements.txt
 └── README.md
 ```
+
+## Limitations & Real-World Nuances
+
+- **Fixed seat capacity & yield:** Rescuing more qualified applicants via human review increases total admits in this unconstrained sandbox. At a selective university with a fixed freshman class size and yield target, lowering false negatives requires tightening the auto-admit bar or managing a waitlist (trading off FNR against FPR/over-enrollment risk).
+- **Idealized human review:** `src/escalation_policy.py` models human readers with a symmetric **92%** accuracy rate across cohorts. Real admissions committees experience reader fatigue, inter-rater variance, and their own cognitive biases.
+- **Post-hoc escalation vs. upstream feature engineering:** Even after targeted escalation, **50.0%** of qualified non-traditional applicants remain auto-rejected below `0.04`. In production, context-aware escalation should be paired with upstream feature engineering (such as replacing raw AP counts with `ap_utilization = ap_courses_taken / school_ap_cap`).
 
 ## "Try This Next" Winter Break Challenge
 

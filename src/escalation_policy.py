@@ -2,8 +2,8 @@
 Session 3: Human-in-the-Loop Review Band & Escalation Policy Simulation
 Loads Session 2's audited predictions (outputs/audited_applicants.csv),
 simulates imperfect human review (human_review_accuracy), compares standard
-probability review bands against context-aware escalation, and saves the
-trade-off curve for Session 4 visualization.
+probability review bands against an observable context-proxy escalation rule,
+and saves the trade-off results for Session 4 visualization.
 """
 
 from pathlib import Path
@@ -76,7 +76,7 @@ def main() -> None:
     print(f"SESSION 3: HUMAN-IN-THE-LOOP ESCALATION SIMULATION (Human Acc = {human_acc:.0%})")
     print("=" * 78)
 
-    # 1. Sweep standard probability bands (for trade-off curve plotting)
+    # 1. Sweep standard probability bands
     bands = [
         ("No Escalation (Baseline)", 0.50, 0.50),
         ("Narrow Band [0.35, 0.65]", 0.35, 0.65),
@@ -114,15 +114,18 @@ def main() -> None:
             f"{stats['nontrad_fnr']:>10.1%}"
         )
 
-    # 2. Context-Aware Review Band:
-    # Standard uncertainty band [0.20, 0.65] for traditional profiles,
-    # lower floor [0.04, 0.65] where quantitative data flattens non-traditional context.
+    # 2. Context-Aware Review Band (Cohort-Blind / Observable Context Proxies):
+    # Lower review floor [0.04, 0.65] when observable educational/life constraints
+    # exist (school_ap_cap <= 6 OR outside_hours_wk >= 10), else standard [0.20, 0.65].
+    has_context_constraint = (df["school_ap_cap"] <= 6) | (df["outside_hours_wk"] >= 10.0)
     context_mask = (
-        ((df["cohort"] == "traditional") & (df["pred_prob"] >= 0.20) & (df["pred_prob"] <= 0.65))
-        | ((df["cohort"] == "non_traditional") & (df["pred_prob"] >= 0.04) & (df["pred_prob"] <= 0.65))
+        ((~has_context_constraint) & (df["pred_prob"] >= 0.20) & (df["pred_prob"] <= 0.65))
+        | (has_context_constraint & (df["pred_prob"] >= 0.04) & (df["pred_prob"] <= 0.65))
     )
     ctx_stats = evaluate_policy(df, context_mask, human_review_accuracy=human_acc, seed=42)
-    ctx_stats["policy"] = "Context-Aware Band (Trad [0.20,0.65] / NonTrad [0.04,0.65])"
+    ctx_stats["policy"] = (
+        "Context-Aware Band (AP Cap <=6 or Work >=10h: [0.04,0.65] / Else: [0.20,0.65])"
+    )
     ctx_stats["band_low"] = np.nan
     ctx_stats["band_high"] = np.nan
     curve_rows.append(ctx_stats)
@@ -130,7 +133,7 @@ def main() -> None:
     baseline_nontrad_fnr = curve_rows[0]["nontrad_fnr"]
     fnr_reduction = (baseline_nontrad_fnr - ctx_stats["nontrad_fnr"]) / baseline_nontrad_fnr
 
-    print("\n2. CONTEXT-AWARE ESCALATION POLICY (TARGETED REVIEW BAND)")
+    print("\n2. CONTEXT-AWARE ESCALATION POLICY (OBSERVABLE CONTEXT PROXIES)")
     print("-" * 78)
     print(f"Policy: {ctx_stats['policy']}")
     print(f"  Applications Escalated to Human Reader:   {ctx_stats['escalated_pct']:.1%} ({ctx_stats['escalated_count']:,} / {len(df):,})")
