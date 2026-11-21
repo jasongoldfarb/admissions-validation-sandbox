@@ -1,6 +1,10 @@
 # Selective Admissions Model Validation & Escalation Sandbox
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jasongoldfarb/admissions-validation-sandbox/blob/main/walkthrough.ipynb)
+
 A self-contained Python model-validation sandbox exploring **why strong headline accuracy can hide subgroup blind spots**—and how a **human-in-the-loop review band** ("letting the model say *I'm not sure*") reduces wrongful auto-rejections on applicants whose qualitative context gets flattened by quantitative snapshots.
+
+👉 **Want to explore interactively?** Open [`walkthrough.ipynb`](walkthrough.ipynb) directly on GitHub to read the pre-rendered tables and charts, or click the **Open in Colab** badge above to run the operational sensitivity sandbox in your browser with zero local setup.
 
 Built as a low-friction **winter-break / New Year's coding sandbox** for data scientists, analysts, and curious builders.
 
@@ -40,16 +44,24 @@ python src/escalation_policy.py
 python src/make_charts.py
 ```
 
+Or launch the interactive notebook locally:
+
+```bash
+jupyter notebook walkthrough.ipynb
+```
+
 ## Project Structure
 
 ```text
 admissions-validation-sandbox/
 ├── src/
+│   ├── __init__.py             # Enables clean module imports from walkthrough.ipynb
 │   ├── baseline_repro.py       # Session 1: Baseline simulation (paper priors) & subgroup metrics
 │   ├── audit_borderline.py     # Session 2: Score-zone slice & flattened-context audit
 │   ├── escalation_policy.py    # Session 3: Observable context-proxy review band simulation
 │   └── make_charts.py          # Session 4: Generate PNG visuals from simulation outputs
 ├── outputs/                    # Generated CSVs and PNG charts
+├── walkthrough.ipynb           # End-to-end narrated walkthrough & operational sensitivity sandbox
 ├── requirements.txt
 └── README.md
 ```
@@ -62,7 +74,7 @@ admissions-validation-sandbox/
 
 ## "Try This Next" Winter Break Challenge
 
-1. **Test human review accuracy sensitivity:** Edit `human_acc` in `src/escalation_policy.py` (e.g., `0.85` vs. `0.95`)—at what human review accuracy does escalating borderline cases stop improving overall accuracy?
+1. **Test human review accuracy sensitivity:** Edit `human_acc` in `walkthrough.ipynb` (Section 5) or `src/escalation_policy.py` (e.g., `0.85` vs. `0.95`)—at what human review accuracy does escalating borderline cases stop improving overall accuracy?
 2. **Hidden Confounder / Omitted Variable Experiment:** Add an unmeasured **legacy / institutional-familiarity boost** into `historical_admit` without exposing it to the model. How does that shift the decision boundary and change which applicants land inside or outside the review band?
 3. **Capacity-Constrained Escalation:** Suppose human admissions readers can only review **5%** of total applications. Design a ranking or context-triggered rule to pick *which* 5% get human eyes first.
 
