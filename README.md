@@ -25,12 +25,12 @@ To test human-in-the-loop escalation at the single-institution level, the sandbo
 
 ![Aggregate vs. Subgroup Performance](outputs/chart1_aggregate_vs_subgroup.png)
 
-![Human-in-the-Loop Trade-Off Curve](outputs/chart2_escalation_tradeoff.png)
+![Targeted Human-in-the-Loop Escalation: Cost vs. Payoff](outputs/chart2_escalation_tradeoff.png)
 
 ## Quickstart
 
 ```bash
-git clone [https://github.com/jasongoldfarb/admissions-validation-sandbox.git](https://github.com/jasongoldfarb/admissions-validation-sandbox.git)
+git clone https://github.com/jasongoldfarb/admissions-validation-sandbox.git
 cd admissions-validation-sandbox
 pip install -r requirements.txt
 
