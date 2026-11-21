@@ -2,14 +2,22 @@
 Session 4: Generate Publication-Ready Charts for README & LinkedIn Post
 Reads outputs/audited_applicants.csv and outputs/escalation_tradeoff.csv
 to produce:
-  1. outputs/chart1_aggregate_vs_subgroup.png
-  2. outputs/chart2_escalation_tradeoff.png
+1. outputs/chart1_aggregate_vs_subgroup.png
+2. outputs/chart2_escalation_tradeoff.png
 """
 
 from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
+
+def _set_style() -> None:
+    plt.style.use(
+        "seaborn-v0_8-whitegrid"
+        if "seaborn-v0_8-whitegrid" in plt.style.available
+        else "seaborn-whitegrid"
+    )
 
 
 def make_chart1(audited_df: pd.DataFrame, tradeoff_df: pd.DataFrame, out_path: Path) -> None:
@@ -33,11 +41,11 @@ def make_chart1(audited_df: pd.DataFrame, tradeoff_df: pd.DataFrame, out_path: P
     ]
     colors = ["#2b5c8f", "#5c768d", "#c0392b", "#1e8449"]
 
-    plt.style.use("seaborn-v0_8-whitegrid" if "seaborn-v0_8-whitegrid" in plt.style.available else "seaborn-whitegrid")
-    fig, ax = plt.subplots(figsize=(9.5, 5.2), dpi=200)
+    _set_style()
+    fig, ax = plt.subplots(figsize=(9.5, 5.4), dpi=200)
 
     bars = ax.bar(labels, values, color=colors, width=0.52, edgecolor="none")
-    ax.set_ylim(0, 102)
+    ax.set_ylim(0, 105)
     ax.set_ylabel("Percentage (%)", fontsize=11, fontweight="bold")
     ax.set_title(
         "The Illusion of Aggregate Accuracy: Subgroup Blind Spots & Escalation Impact",
@@ -47,26 +55,28 @@ def make_chart1(audited_df: pd.DataFrame, tradeoff_df: pd.DataFrame, out_path: P
     )
     ax.tick_params(axis="x", labelsize=10)
     ax.tick_params(axis="y", labelsize=10)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
 
     for bar, val in zip(bars, values):
         ax.text(
             bar.get_x() + bar.get_width() / 2,
-            val + 2.2,
+            val + 2.0,
             f"{val:.1f}%",
             ha="center",
             va="bottom",
-            fontsize=10.5,
+            fontsize=11,
             fontweight="bold",
             color="#1f2933",
         )
 
     ax.annotate(
-        "High headline accuracy masks\n67.8% missed qualified\nnon-traditional candidates",
-        xy=(2, values[2]),
-        xytext=(1.55, 81),
-        arrowprops=dict(arrowstyle="->", color="#7f8c8d", lw=1.2),
+        f"{overall_acc:.1f}% headline accuracy masks\n{values[2]:.1f}% missed qualified\nnon-traditional candidates",
+        xy=(2, values[2] + 6),
+        xytext=(1.15, 83),
+        arrowprops=dict(arrowstyle="->", color="#7f8c8d", lw=1.3),
         fontsize=9.5,
-        bbox=dict(boxstyle="round,pad=0.35", facecolor="#fdf2e9", edgecolor="#e67e22", lw=1),
+        bbox=dict(boxstyle="round,pad=0.4", facecolor="#fdf2e9", edgecolor="#e67e22", lw=1),
     )
 
     fig.tight_layout()
@@ -74,60 +84,144 @@ def make_chart1(audited_df: pd.DataFrame, tradeoff_df: pd.DataFrame, out_path: P
     plt.close(fig)
 
 
-def make_chart2(tradeoff_df: pd.DataFrame, out_path: Path) -> None:
-    """Plot human review workload (%) vs. non-traditional wrongful rejection rate."""
-    sweep_df = tradeoff_df[~tradeoff_df["policy"].str.startswith("Context-Aware Band")].copy()
-    sweep_df = sweep_df.sort_values("escalated_pct")
-
+def make_chart2(audited_df: pd.DataFrame, tradeoff_df: pd.DataFrame, out_path: Path) -> None:
+    """2-panel Cost vs. Payoff storytelling chart for Context-Aware Escalation."""
+    base_row = tradeoff_df[tradeoff_df["policy"] == "No Escalation (Baseline)"].iloc[0]
     ctx_row = tradeoff_df[tradeoff_df["policy"].str.startswith("Context-Aware Band")].iloc[0]
 
-    plt.style.use("seaborn-v0_8-whitegrid" if "seaborn-v0_8-whitegrid" in plt.style.available else "seaborn-whitegrid")
-    fig, ax = plt.subplots(figsize=(9.5, 5.2), dpi=200)
+    acc_col = next(
+        (c for c in ["overall_acc", "overall_accuracy", "accuracy"] if c in tradeoff_df.columns),
+        None,
+    )
+    base_acc = (
+        base_row[acc_col] * 100
+        if acc_col
+        else (audited_df["true_qualified"] == audited_df["pred_admit"]).mean() * 100
+    )
+    ctx_acc = ctx_row[acc_col] * 100 if acc_col else base_acc
 
-    ax.plot(
-        sweep_df["escalated_pct"] * 100,
-        sweep_df["nontrad_fnr"] * 100,
-        marker="o",
-        linewidth=2.2,
-        color="#2b5c8f",
-        label="Symmetric Probability Band Sweep",
+    n_total = len(audited_df)
+    esc_pct = ctx_row["escalated_pct"] * 100
+    auto_pct = 100.0 - esc_pct
+    esc_n = int(round(ctx_row["escalated_pct"] * n_total))
+
+    base_trad_fnr = base_row["trad_fnr"] * 100
+    ctx_trad_fnr = ctx_row["trad_fnr"] * 100
+    base_nontrad_fnr = base_row["nontrad_fnr"] * 100
+    ctx_nontrad_fnr = ctx_row["nontrad_fnr"] * 100
+    rel_drop = (base_nontrad_fnr - ctx_nontrad_fnr) / base_nontrad_fnr * 100
+
+    _set_style()
+    fig, (ax_cost, ax_payoff) = plt.subplots(
+        1, 2, figsize=(11.2, 5.2), dpi=200, gridspec_kw={"width_ratios": [1.0, 2.25]}
     )
 
-    # Highlight Context-Aware Band point
-    ctx_x = ctx_row["escalated_pct"] * 100
-    ctx_y = ctx_row["nontrad_fnr"] * 100
-    ax.scatter(
-        [ctx_x],
-        [ctx_y],
+    # --- LEFT PANEL: Operational Cost (Human Workload) ---
+    ax_cost.bar(["All\nApps"], [auto_pct], width=0.45, color="#d5dce4", label="Automated")
+    ax_cost.bar(
+        ["All\nApps"],
+        [esc_pct],
+        bottom=[auto_pct],
+        width=0.45,
         color="#1e8449",
-        s=110,
-        zorder=5,
-        label="Context-Aware Review Band (4.9% Escalated)",
+        label="Human Review",
     )
-    ax.annotate(
-        f"Context-Aware Band\n({ctx_x:.1f}% escalated -> {ctx_y:.1f}% FNR)",
-        xy=(ctx_x, ctx_y),
-        xytext=(ctx_x + 12, ctx_y + 11),
-        arrowprops=dict(arrowstyle="->", color="#1e8449", lw=1.3),
+    ax_cost.set_ylim(0, 108)
+    ax_cost.set_ylabel("Share of Applications (%)", fontsize=10.5, fontweight="bold")
+    ax_cost.set_title("1. The Cost: Human Workload", fontsize=11.5, fontweight="bold", pad=10)
+    ax_cost.spines["top"].set_visible(False)
+    ax_cost.spines["right"].set_visible(False)
+    ax_cost.grid(axis="x", visible=False)
+
+    ax_cost.text(
+        0,
+        auto_pct / 2,
+        f"{auto_pct:.1f}%\nAutomated",
+        ha="center",
+        va="center",
+        fontsize=11,
+        fontweight="bold",
+        color="#334e68",
+    )
+    ax_cost.annotate(
+        f"Only {esc_pct:.1f}% Escalated\n({esc_n:,} of {n_total:,} apps)",
+        xy=(0.22, auto_pct + esc_pct / 2),
+        xytext=(0.38, 78),
+        arrowprops=dict(arrowstyle="->", color="#1e8449", lw=1.4),
         fontsize=9.5,
         fontweight="bold",
         color="#145a32",
         bbox=dict(boxstyle="round,pad=0.35", facecolor="#eafaf1", edgecolor="#1e8449", lw=1),
     )
+    ax_cost.set_xlim(-0.55, 1.35)
 
-    ax.set_xlim(-3, 105)
-    ax.set_ylim(0, 76)
-    ax.set_xlabel("Applications Escalated to Human Review (%)", fontsize=11, fontweight="bold")
-    ax.set_ylabel("Non-Traditional Wrongful Reject Rate (%)", fontsize=11, fontweight="bold")
-    ax.set_title(
-        "Human-in-the-Loop Trade-Off: Escalation Workload vs. Missed Qualified Applicants",
-        fontsize=13,
-        fontweight="bold",
-        pad=14,
+    # --- RIGHT PANEL: Validation Payoff (Before vs. After) ---
+    metrics = [
+        "Overall System\nAccuracy\n(Higher is better)",
+        "Traditional\nWrongful Rejects\n(Lower is better)",
+        "Non-Traditional\nWrongful Rejects\n(Lower is better)",
+    ]
+    base_vals = [base_acc, base_trad_fnr, base_nontrad_fnr]
+    ctx_vals = [ctx_acc, ctx_trad_fnr, ctx_nontrad_fnr]
+    deltas = [
+        f"+{ctx_acc - base_acc:.1f} pts",
+        f"-{base_trad_fnr - ctx_trad_fnr:.1f} pts",
+        f"-{rel_drop:.1f}% relative",
+    ]
+
+    y = np.arange(len(metrics))
+    h = 0.34
+
+    bars_base = ax_payoff.barh(
+        y + h / 2, base_vals, height=h, color="#9fb3c8", label="Baseline (0% Human Review)"
     )
-    ax.legend(loc="upper right", frameon=True, fontsize=9.5)
+    bars_ctx = ax_payoff.barh(
+        y - h / 2,
+        ctx_vals,
+        height=h,
+        color="#1e8449",
+        label=f"Context-Aware Escalation ({esc_pct:.1f}% Human)",
+    )
 
-    fig.tight_layout()
+    ax_payoff.set_yticks(y)
+    ax_payoff.set_yticklabels(metrics, fontsize=10, fontweight="bold")
+    ax_payoff.set_xlim(0, 115)
+    ax_payoff.set_xlabel("Percentage (%)", fontsize=10.5, fontweight="bold")
+    ax_payoff.set_title("2. The Payoff: Accuracy & Fairness", fontsize=11.5, fontweight="bold", pad=10)
+    ax_payoff.spines["top"].set_visible(False)
+    ax_payoff.spines["right"].set_visible(False)
+    ax_payoff.grid(axis="y", visible=False)
+    ax_payoff.legend(loc="center right", frameon=True, fontsize=9.5)
+
+    for b_bar, c_bar, b_val, c_val, delta in zip(bars_base, bars_ctx, base_vals, ctx_vals, deltas):
+        ax_payoff.text(
+            b_val + 1.4,
+            b_bar.get_y() + b_bar.get_height() / 2,
+            f"{b_val:.1f}%",
+            va="center",
+            ha="left",
+            fontsize=9.5,
+            color="#486581",
+            fontweight="bold",
+        )
+        ax_payoff.text(
+            c_val + 1.4,
+            c_bar.get_y() + c_bar.get_height() / 2,
+            f"{c_val:.1f}%  ({delta})",
+            va="center",
+            ha="left",
+            fontsize=9.8,
+            color="#145a32",
+            fontweight="bold",
+        )
+
+    fig.suptitle(
+        "Targeted Human-in-the-Loop Escalation: Small Review Lift, Big Fairness Payoff",
+        fontsize=13.5,
+        fontweight="bold",
+        y=0.98,
+    )
+    fig.tight_layout(rect=[0, 0, 1, 0.93])
     fig.savefig(out_path, dpi=200)
     plt.close(fig)
 
@@ -151,7 +245,7 @@ def main() -> None:
     c2_path = out_dir / "chart2_escalation_tradeoff.png"
 
     make_chart1(audited_df, tradeoff_df, c1_path)
-    make_chart2(tradeoff_df, c2_path)
+    make_chart2(audited_df, tradeoff_df, c2_path)
     print(f"Saved charts to:\n  - {c1_path}\n  - {c2_path}")
 
 
