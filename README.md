@@ -38,7 +38,7 @@ To test human-in-the-loop escalation at the single-institution level, the sandbo
 ## Quickstart
 
 ```bash
-git clone [https://github.com/jasongoldfarb/admissions-validation-sandbox.git](https://github.com/jasongoldfarb/admissions-validation-sandbox.git)
+git clone https://github.com/jasongoldfarb/admissions-validation-sandbox.git
 cd admissions-validation-sandbox
 pip install -r requirements.txt
 
