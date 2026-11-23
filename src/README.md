@@ -1,0 +1,114 @@
+# Source Modules (`src/`)
+
+Pipeline modules for the Selective Admissions Model Validation & Escalation Sandbox. Each script can be run standalone via CLI or imported directly (as in `walkthrough.ipynb`).
+
+---
+
+## 1. `baseline_repro.py`
+
+### Purpose & Pipeline Role
+Generates the simulated applicant pool anchored to the empirical priors in Ray, Padmanabhan, and Bouayad (*INFORMS Journal on Computing*, `INFORMSJoC/2023.0523`), trains a baseline logistic regression screener on biased historical admissions labels, and evaluates overall vs. cohort-level performance against ground-truth readiness.
+
+- **Inputs:** None (self-contained generator with fixed seed `42`).
+- **Outputs:** `outputs/baseline_applicants.csv` (3,000-row stratified holdout set with baseline `pred_prob` and `pred_admit`).
+
+### Key Functions & Parameters
+- `generate_applicants(n_samples: int = 10_000, seed: int = 42) -> pd.DataFrame`
+  Simulates applicant features, flattened qualitative context (`school_ap_cap`, `outside_hours_wk`, `upward_trajectory`), `true_qualified`, and `historical_admit`.
+- `summarize_metrics(df: pd.DataFrame, label_col: str = "true_qualified", pred_col: str = "pred_admit") -> dict`
+  Returns `n`, `accuracy`, `fnr_wrongful_reject`, `tpr_equal_opportunity`, and `missed_qualified_count`. Safely handles zero-positive edge cases without division errors.
+- `main() -> None`
+  Runs a 70/30 stratified train/test split (`random_state=42`), fits `StandardScaler` + `LogisticRegression` on the 4 raw tabular features (`gpa`, `test_score`, `ap_courses_taken`, `leadership_index`), prints the cohort summary, and writes `outputs/baseline_applicants.csv`.
+
+### Modeling & Implementation Notes
+- **Empirical Priors:** `FRACTION_OF_PROTECTED = 1 - 7.8/15.4` (~49.4%), `SAT_MEAN = 1030.0`, `SAT_STD = 235.0`, `QUALITY_MU = 0.5`, `QUALITY_SIGMA = 0.1`, `TIER1_ADMIT_RATE = 0.20`.
+- **Feature Bounds:** `gpa` clipped to `[2.0, 4.0]`, `test_score` rounded to nearest 10 in `[400, 1600]`, `ap_courses_taken` bounded by `[0, school_ap_cap]`, `leadership_index` clipped to `[1.0, 10.0]`.
+
+### Standalone Usage
+```bash
+python src/baseline_repro.py
+```
+
+---
+
+## 2. `audit_borderline.py`
+
+### Purpose & Pipeline Role
+Loads the holdout predictions from `baseline_repro.py`, buckets applicants into decision zones, and quantifies where qualified applicants are wrongfully auto-rejected across cohorts. It also prints a side-by-side comparison of observable features vs. flattened qualitative context for missed non-traditional candidates and admitted traditional candidates.
+
+- **Inputs:** `outputs/baseline_applicants.csv` (raises `FileNotFoundError` if missing).
+- **Outputs:** `outputs/audited_applicants.csv` (adds `zone`, `ap_utilization`, and `wrongful_reject` columns).
+
+### Key Functions & Parameters
+- `assign_zone(prob: float, low: float = 0.20, high: float = 0.65) -> str`
+  Maps a predicted probability to one of three ordered zone labels:
+  - `prob < low` → `"1_clear_reject (<0.20)"`
+  - `low <= prob <= high` → `"2_borderline (0.20-0.65)"`
+  - `prob > high` → `"3_clear_admit (>0.65)"`
+- `main() -> None`
+  Reads `outputs/baseline_applicants.csv`, computes derived audit fields, prints the zone breakdown, cohort-by-zone missed-qualified table, and flattened-context comparison, then writes `outputs/audited_applicants.csv`.
+
+### Modeling & Implementation Notes
+- **Derived Columns:**
+  - `ap_utilization = ap_courses_taken / school_ap_cap.clip(lower=1)` (guards against zero-AP schools).
+  - `wrongful_reject = 1` when `true_qualified == 1` and `pred_admit == 0`, else `0`.
+- **Zone Boundaries:** The borderline band `[0.20, 0.65]` is inclusive on both endpoints.
+
+### Standalone Usage
+```bash
+python src/audit_borderline.py
+```
+
+---
+
+## 3. `escalation_policy.py`
+
+### Purpose & Pipeline Role
+Simulates imperfect human-in-the-loop (HITL) review on escalated applications, sweeps 7 standard probability review bands from 0% to 100% escalation, and compares them against a cohort-blind, context-triggered escalation policy.
+
+- **Inputs:** `outputs/audited_applicants.csv` (raises `FileNotFoundError` if missing).
+- **Outputs:** `outputs/escalation_tradeoff.csv` (8-row summary table with workload, overall accuracy, and cohort-level FNR/TPR metrics for each policy).
+
+### Key Functions & Parameters
+- `evaluate_policy(df: pd.DataFrame, escalate_mask: pd.Series, human_review_accuracy: float = 0.92, seed: int = 42) -> dict`
+  Overrides `pred_admit` on rows where `escalate_mask` is `True` using a simulated human reviewer who identifies `true_qualified` correctly with probability `human_review_accuracy`. Returns `escalated_pct`, `escalated_count`, `overall_accuracy`, `overall_fnr`, `trad_accuracy`, `trad_fnr`, `trad_tpr`, `nontrad_accuracy`, `nontrad_fnr`, and `nontrad_tpr`.
+- `main() -> None`
+  Reads `outputs/audited_applicants.csv`, evaluates the 7 standard probability bands plus the context-aware policy at `human_review_accuracy = 0.92` (`seed = 42`), prints the comparison tables, and writes `outputs/escalation_tradeoff.csv`.
+
+### Modeling & Implementation Notes
+- **Cohort-Blind Context Trigger:** Routes on observable constraints (`school_ap_cap <= 6` or `outside_hours_wk >= 10.0`) using a lower review floor `[0.04, 0.65]`, and `[0.20, 0.65]` for all other applicants—never referencing the `cohort` label.
+- **Reproducibility:** Uses `np.random.default_rng(seed)` so each policy evaluation is deterministic.
+
+### Standalone Usage
+```bash
+python src/escalation_policy.py
+```
+
+---
+
+## 4. `make_charts.py`
+
+### Purpose & Pipeline Role
+Reads the audited holdout predictions and escalation trade-off summary to generate publication-ready PNG visuals for the `README.md`, `walkthrough.ipynb`, and external sharing.
+
+- **Inputs:** `outputs/audited_applicants.csv` and `outputs/escalation_tradeoff.csv` (raises `FileNotFoundError` if either is missing).
+- **Outputs:**
+  - `outputs/chart1_aggregate_vs_subgroup.png` — Bar chart contrasting headline accuracy against subgroup wrongful auto-rejection rates (before and after escalation).
+  - `outputs/chart2_escalation_tradeoff.png` — Two-panel Cost vs. Payoff visual pairing human review workload against accuracy and FNR improvements.
+
+### Key Functions & Parameters
+- `make_chart1(audited_df: pd.DataFrame, tradeoff_df: pd.DataFrame, out_path: Path) -> None`
+  Renders and saves the aggregate vs. subgroup performance chart at 200 DPI.
+- `make_chart2(audited_df: pd.DataFrame, tradeoff_df: pd.DataFrame, out_path: Path) -> None`
+  Renders and saves the two-panel workload vs. fairness payoff chart at 200 DPI. Automatically resolves `overall_acc`, `overall_accuracy`, or `accuracy` from `tradeoff_df` (falling back to `audited_df` if absent).
+- `main() -> None`
+  Validates upstream CSVs, ensures `outputs/` exists, and generates both PNG charts.
+
+### Modeling & Implementation Notes
+- **Style Compatibility:** `_set_style()` selects `seaborn-v0_8-whitegrid` when available and falls back to `seaborn-whitegrid` for older Matplotlib environments.
+- **Memory Safety:** Both chart functions call `plt.close(fig)` after saving so repeated calls (e.g., in notebooks or tests) do not leak figure handles.
+
+### Standalone Usage
+```bash
+python src/make_charts.py
+```
