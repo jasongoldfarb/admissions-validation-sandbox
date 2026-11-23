@@ -226,6 +226,73 @@ def make_chart2(audited_df: pd.DataFrame, tradeoff_df: pd.DataFrame, out_path: P
     plt.close(fig)
 
 
+
+
+def make_chart3(long_df: pd.DataFrame, out_path: Path) -> None:
+    """2-panel longitudinal dynamics chart: Quality Gap & Non-Trad FNR over 50 cycles."""
+    base = long_df[long_df["regime"] == "baseline"].sort_values("cycle")
+    hitl = long_df[long_df["regime"] == "context_aware_hitl"].sort_values("cycle")
+
+    _set_style()
+    fig, (ax_gap, ax_fnr) = plt.subplots(1, 2, figsize=(11.5, 4.8), dpi=200)
+
+    # --- LEFT PANEL: Subgroup Quality Gap ---
+    ax_gap.axhline(0.0, color="#7f8c8d", linestyle="--", lw=1.1, alpha=0.8)
+    ax_gap.plot(
+        base["cycle"],
+        base["quality_gap"],
+        color="#c0392b",
+        lw=2.4,
+        label="Automated Baseline (0% HITL)",
+    )
+    ax_gap.plot(
+        hitl["cycle"],
+        hitl["quality_gap"],
+        color="#1e8449",
+        lw=2.4,
+        label=f"Context-Aware HITL ({hitl['escalated_pct'].mean()*100:.1f}% avg review)",
+    )
+    ax_gap.set_title("1. Compounding Subgroup Quality Gap", fontsize=11.5, fontweight="bold", pad=10)
+    ax_gap.set_xlabel("Decision Cycle (t)", fontsize=10.5, fontweight="bold")
+    ax_gap.set_ylabel("Mean Quality Gap (Trad - NonTrad)", fontsize=10.5, fontweight="bold")
+    ax_gap.spines["top"].set_visible(False)
+    ax_gap.spines["right"].set_visible(False)
+    ax_gap.legend(loc="upper left", frameon=True, fontsize=9.2)
+
+    # --- RIGHT PANEL: Non-Traditional Wrongful Rejection Rate (FNR) ---
+    ax_fnr.plot(
+        base["cycle"],
+        base["nontrad_fnr"] * 100,
+        color="#c0392b",
+        lw=2.4,
+        label="Automated Baseline (0% HITL)",
+    )
+    ax_fnr.plot(
+        hitl["cycle"],
+        hitl["nontrad_fnr"] * 100,
+        color="#1e8449",
+        lw=2.4,
+        label="Context-Aware HITL",
+    )
+    ax_fnr.set_title("2. Non-Traditional Wrongful Rejects (FNR)", fontsize=11.5, fontweight="bold", pad=10)
+    ax_fnr.set_xlabel("Decision Cycle (t)", fontsize=10.5, fontweight="bold")
+    ax_fnr.set_ylabel("Wrongful Rejection Rate (%)", fontsize=10.5, fontweight="bold")
+    ax_fnr.set_ylim(-2, 70)
+    ax_fnr.spines["top"].set_visible(False)
+    ax_fnr.spines["right"].set_visible(False)
+    ax_fnr.legend(loc="upper right", frameon=True, fontsize=9.2)
+
+    fig.suptitle(
+        "50-Cycle Longitudinal Dynamics (Table 2 Extension: dQ+ = +0.05, dQ- = -0.05)",
+        fontsize=13,
+        fontweight="bold",
+        y=0.98,
+    )
+    fig.tight_layout(rect=[0, 0, 1, 0.93])
+    fig.savefig(out_path, dpi=200)
+    plt.close(fig)
+
+
 def main() -> None:
     audited_path = Path("outputs/audited_applicants.csv")
     tradeoff_path = Path("outputs/escalation_tradeoff.csv")
@@ -246,7 +313,14 @@ def main() -> None:
 
     make_chart1(audited_df, tradeoff_df, c1_path)
     make_chart2(audited_df, tradeoff_df, c2_path)
-    print(f"Saved charts to:\n  - {c1_path}\n  - {c2_path}")
+    saved = [c1_path, c2_path]
+    long_path = Path("outputs/longitudinal_dynamics.csv")
+    if long_path.exists():
+        c3_path = out_dir / "chart3_longitudinal_dynamics.png"
+        make_chart3(pd.read_csv(long_path), c3_path)
+        saved.append(c3_path)
+
+    print("Saved charts to:\n" + "\n".join(f"  - {p}" for p in saved))
 
 
 if __name__ == "__main__":
