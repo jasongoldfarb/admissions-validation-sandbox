@@ -13,12 +13,18 @@ upward grade trajectory) to test human-in-the-loop escalation.
 """
 
 from pathlib import Path
+from typing import Optional
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
+
+if __package__:
+    from .paths import get_output_dir
+else:
+    from paths import get_output_dir
 
 # Empirical priors from INFORMSJoC/2023.0523
 FRACTION_OF_PROTECTED = 1.0 - (7.8 / 15.4)  # NCES undergraduate enrollment (~49.35%)
@@ -27,6 +33,25 @@ SAT_STD = 235.0                              # College Board std dev
 QUALITY_MU = 0.5                             # Equal underlying quality mean (P0 = P1)
 QUALITY_SIGMA = 0.1                          # Equal underlying quality std (P0 = P1)
 TIER1_ADMIT_RATE = 0.20                      # Tau1 = 20% selective tier cutoff
+
+
+def compute_true_readiness_score(
+    z_acad: np.ndarray,
+    z_nonacad: np.ndarray,
+    ap_utilization: np.ndarray,
+    outside_hours_wk: np.ndarray,
+    upward_trajectory: np.ndarray,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    """Score readiness using latent quality and the same context signals in each simulation."""
+    return (
+        1.05 * z_acad
+        + 0.45 * z_nonacad
+        + 0.35 * ap_utilization
+        + 0.025 * outside_hours_wk
+        + 0.35 * upward_trajectory
+        + rng.normal(0, 0.35, size=len(z_acad))
+    )
 
 
 def generate_applicants(n_samples: int = 10_000, seed: int = 42) -> pd.DataFrame:
@@ -101,13 +126,13 @@ def generate_applicants(n_samples: int = 10_000, seed: int = 42) -> pd.DataFrame
     )
 
     # Ground-truth readiness (true academic/non-academic quality + context adjustments)
-    true_readiness_score = (
-        1.05 * z_acad
-        + 0.45 * z_nonacad
-        + 0.35 * (ap_courses_taken / np.maximum(school_ap_cap, 1))
-        + 0.025 * outside_hours_wk
-        + 0.35 * upward_trajectory
-        + rng.normal(0, 0.35, size=n_samples)
+    true_readiness_score = compute_true_readiness_score(
+        z_acad,
+        z_nonacad,
+        ap_courses_taken / np.maximum(school_ap_cap, 1),
+        outside_hours_wk,
+        upward_trajectory,
+        rng,
     )
     true_qualified = (
         true_readiness_score >= np.quantile(true_readiness_score, 1.0 - TIER1_ADMIT_RATE)
@@ -159,7 +184,7 @@ def summarize_metrics(df: pd.DataFrame, label_col: str = "true_qualified", pred_
     }
 
 
-def main() -> None:
+def main(output_dir: Optional[Path] = None) -> None:
     df = generate_applicants(n_samples=10_000, seed=42)
 
     feature_cols = ["gpa", "test_score", "ap_courses_taken", "leadership_index"]
@@ -203,7 +228,8 @@ def main() -> None:
     print(f"  True Positive Rate (Equal Opportunity):   {nontrad['tpr_equal_opportunity']:.1%}")
     print("=" * 64)
 
-    output_path = Path("outputs/baseline_applicants.csv")
+    output_dir = get_output_dir(output_dir)
+    output_path = output_dir / "baseline_applicants.csv"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     test_df.to_csv(output_path, index=False)
     print(f"\nSaved holdout dataset & baseline scores to: {output_path}")

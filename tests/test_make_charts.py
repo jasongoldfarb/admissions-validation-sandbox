@@ -70,14 +70,12 @@ def test_make_chart2_fallback_when_accuracy_col_missing(tmp_path):
 
 def test_main_raises_when_inputs_missing(tmp_path, monkeypatch):
     """Fail fast with FileNotFoundError if Session 2/3 CSVs are missing."""
-    monkeypatch.chdir(tmp_path)
     with pytest.raises(FileNotFoundError, match="Missing Session 2/3 CSV outputs"):
-        make_charts.main()
+        make_charts.main(tmp_path / "outputs")
 
 
 def test_main_generates_both_charts(tmp_path, monkeypatch):
     """main() reads CSVs from outputs/ and writes both PNG charts."""
-    monkeypatch.chdir(tmp_path)
     out_dir = tmp_path / "outputs"
     out_dir.mkdir()
 
@@ -85,7 +83,7 @@ def test_main_generates_both_charts(tmp_path, monkeypatch):
     audited_df.to_csv(out_dir / "audited_applicants.csv", index=False)
     tradeoff_df.to_csv(out_dir / "escalation_tradeoff.csv", index=False)
 
-    make_charts.main()
+    make_charts.main(out_dir)
 
     c1 = out_dir / "chart1_aggregate_vs_subgroup.png"
     c2 = out_dir / "chart2_escalation_tradeoff.png"

@@ -79,20 +79,18 @@ def test_higher_human_accuracy_improves_overall_accuracy():
 
 def test_main_raises_when_audited_missing(tmp_path, monkeypatch):
     """Fail fast with FileNotFoundError if Session 2 output is missing."""
-    monkeypatch.chdir(tmp_path)
     with pytest.raises(FileNotFoundError, match="audited_applicants.csv"):
-        escalation_policy.main()
+        escalation_policy.main(tmp_path / "outputs")
 
 
 def test_main_writes_tradeoff_csv(tmp_path, monkeypatch):
     """main() writes outputs/escalation_tradeoff.csv with 7 standard bands + 1 context policy."""
-    monkeypatch.chdir(tmp_path)
     out_dir = tmp_path / "outputs"
     out_dir.mkdir()
 
     _sample_audited_df(n=200).to_csv(out_dir / "audited_applicants.csv", index=False)
 
-    escalation_policy.main()
+    escalation_policy.main(out_dir)
 
     out_file = out_dir / "escalation_tradeoff.csv"
     assert out_file.exists()

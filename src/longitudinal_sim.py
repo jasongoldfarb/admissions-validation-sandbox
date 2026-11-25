@@ -25,16 +25,18 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, confusion_matrix
 from sklearn.preprocessing import StandardScaler
 
-try:
-    from src.baseline_repro import (
+if __package__:
+    from .baseline_repro import (
         FRACTION_OF_PROTECTED,
         QUALITY_MU,
         QUALITY_SIGMA,
         SAT_MEAN,
         SAT_STD,
         TIER1_ADMIT_RATE,
+        compute_true_readiness_score,
     )
-except ImportError:
+    from .paths import get_output_dir
+else:
     from baseline_repro import (
         FRACTION_OF_PROTECTED,
         QUALITY_MU,
@@ -42,7 +44,9 @@ except ImportError:
         SAT_MEAN,
         SAT_STD,
         TIER1_ADMIT_RATE,
+        compute_true_readiness_score,
     )
+    from paths import get_output_dir
 
 FEATURE_COLS = ["gpa", "test_score", "ap_courses_taken", "leadership_index"]
 DELTA_Q_POS = 0.05
@@ -131,11 +135,13 @@ def compute_cycle_features(state_df: pd.DataFrame, rng: np.random.Generator) -> 
         10.0,
     )
 
-    # Ground-truth readiness anchored strictly to latent quality (enforces P0 = P1 at t=1)
-    true_readiness_score = (
-        1.05 * z_acad
-        + 0.45 * z_nonacad
-        + rng.normal(0, 0.35, size=n)
+    true_readiness_score = compute_true_readiness_score(
+        z_acad,
+        z_nonacad,
+        ap_courses_taken / np.maximum(school_ap_cap, 1),
+        outside_hours_wk,
+        upward_trajectory,
+        rng,
     )
     true_qualified = (
         true_readiness_score >= np.quantile(true_readiness_score, 1.0 - TIER1_ADMIT_RATE)
@@ -212,10 +218,12 @@ def run_simulation(
         raise ValueError(f"Unknown regime '{regime}'. Use 'baseline' or 'context_aware_hitl'.")
 
     state_df = initialize_ecosystem(n_samples=n_samples, seed=seed)
-    rng = np.random.default_rng(seed + 100)
+    feature_rng = np.random.default_rng(seed + 100)
+    review_rng = np.random.default_rng(seed + 200)
+    shock_rng = np.random.default_rng(seed + 300)
 
     # Fit initial screener on Cycle 0 historical-biased labels
-    init_df = compute_cycle_features(state_df, rng)
+    init_df = compute_cycle_features(state_df, feature_rng)
     train_X = init_df[FEATURE_COLS].to_numpy()
     train_y = init_df["historical_admit"].to_numpy()
 
@@ -225,7 +233,7 @@ def run_simulation(
 
     records = []
     for cycle in range(1, n_cycles + 1):
-        cycle_df = compute_cycle_features(state_df, rng)
+        cycle_df = compute_cycle_features(state_df, feature_rng)
         X_cur = cycle_df[FEATURE_COLS].to_numpy()
         pred_prob = clf.predict_proba(scaler.transform(X_cur))[:, 1]
         pred_admit = (pred_prob >= 0.50).astype(int)
@@ -245,7 +253,7 @@ def run_simulation(
         esc_idx = np.where(escalate_mask)[0]
         if len(esc_idx) > 0:
             true_vals = cycle_df["true_qualified"].to_numpy()[esc_idx]
-            human_correct = rng.binomial(1, human_review_accuracy, size=len(esc_idx))
+            human_correct = review_rng.binomial(1, human_review_accuracy, size=len(esc_idx))
             final_admit[esc_idx] = np.where(human_correct == 1, true_vals, 1 - true_vals)
 
         y_true = cycle_df["true_qualified"].to_numpy()
@@ -278,7 +286,7 @@ def run_simulation(
             delta_q_neg=delta_q_neg,
             decay=decay,
             shock_std=shock_std,
-            rng=rng,
+            rng=shock_rng,
         )
 
         # Retrain on cumulative observed outcomes of admitted candidates
@@ -295,7 +303,7 @@ def run_simulation(
     return pd.DataFrame(records)
 
 
-def main() -> None:
+def main(output_dir: Optional[Path] = None) -> None:
     base_df = run_simulation(regime="baseline", seed=42)
     hitl_df = run_simulation(regime="context_aware_hitl", seed=42)
     results = pd.concat([base_df, hitl_df], ignore_index=True)
@@ -312,7 +320,8 @@ def main() -> None:
         print(f"  Mean Escalation Workload:     {sub['escalated_pct'].mean():>6.1%}")
     print("=" * 76)
 
-    out_path = Path("outputs/longitudinal_dynamics.csv")
+    output_dir = get_output_dir(output_dir)
+    out_path = output_dir / "longitudinal_dynamics.csv"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     results.to_csv(out_path, index=False)
     print(f"\nSaved longitudinal dynamics to: {out_path}")

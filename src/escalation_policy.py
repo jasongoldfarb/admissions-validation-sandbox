@@ -7,9 +7,15 @@ and saves the trade-off results for Session 4 visualization.
 """
 
 from pathlib import Path
+from typing import Optional
 import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score, confusion_matrix
+
+if __package__:
+    from .paths import get_output_dir
+else:
+    from paths import get_output_dir
 
 
 def evaluate_policy(
@@ -62,8 +68,9 @@ def evaluate_policy(
     }
 
 
-def main() -> None:
-    input_path = Path("outputs/audited_applicants.csv")
+def main(output_dir: Optional[Path] = None) -> None:
+    output_dir = get_output_dir(output_dir)
+    input_path = output_dir / "audited_applicants.csv"
     if not input_path.exists():
         raise FileNotFoundError(
             f"Missing {input_path}. Run `python src/audit_borderline.py` first."
@@ -144,7 +151,7 @@ def main() -> None:
     print("=" * 78)
 
     tradeoff_df = pd.DataFrame(curve_rows)
-    out_path = Path("outputs/escalation_tradeoff.csv")
+    out_path = output_dir / "escalation_tradeoff.csv"
     tradeoff_df.to_csv(out_path, index=False)
     print(f"\nSaved escalation trade-off results to: {out_path}")
 

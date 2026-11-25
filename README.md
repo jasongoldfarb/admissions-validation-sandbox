@@ -6,7 +6,7 @@ A self-contained Python model-validation sandbox exploring **why strong headline
 
 👉 **Want to explore interactively?** Open [`walkthrough.ipynb`](walkthrough.ipynb) directly on GitHub to read the pre-rendered tables and charts, or click the **Open in Colab** badge above to run the operational sensitivity sandbox in your browser with zero local setup.
 
-Built as a low-friction **winter-break / New Year's coding sandbox** for data scientists, analysts, and curious builders.
+Built as a low-friction **winter-break / New Year's coding sandbox** for data scientists, analysts, and curious builders. It uses synthetic data for training and is not an admissions decision system.
 
 ## Empirical Priors & Simulation Grounding
 
@@ -17,7 +17,7 @@ The applicant generator in `src/baseline_repro.py` and the 50-cycle extension in
 - **Selectivity threshold:** Top `20%` admit bar (`Tau1 = 20` Tier-1 cutoff).
 - **Longitudinal dynamics (Table 2):** `n = 1,000` individuals, `t = 50` recurring selection cycles, `∆Q+ = +0.05` (reward for admitted & qualified), `∆Q- = -0.05` (penalty for admitted & unqualified).
 
-To test human-in-the-loop escalation at the single-institution level, the sandbox translates the paper's group-level evaluation noise gap into concrete flattened-context variables (school AP caps, outside work/caregiving hours, and upward grade trajectories).
+To test human-in-the-loop escalation at the single-institution level, the sandbox translates the paper's group-level evaluation noise gap into concrete flattened-context variables (school AP caps, outside work/caregiving hours, and upward grade trajectories). Both the single-cycle and longitudinal examples use the same readiness definition: latent academic and non-academic quality, AP utilization, outside work/care hours, upward trajectory, and a noise term, with the top 20% labeled qualified each cycle.
 
 ## Key Findings (Simulated Holdout, N = 3,000)
 
@@ -25,7 +25,7 @@ To test human-in-the-loop escalation at the single-institution level, the sandbo
 - **Subgroup blind spot:** Despite higher cohort accuracy, qualified **non-traditional applicants** face a **68.5%** wrongful auto-rejection rate (false negative rate), compared to **12.0%** for traditional applicants.
 - **Flattened context:** **206 of the 230** missed non-traditional candidates get pushed into the lowest predicted-probability bucket (`< 0.20`) because raw counts (APs taken, club leadership, cumulative GPA) miss school AP caps, heavy outside work/caregiving hours, and upward grade trajectories.
 - **Cohort-blind, context-triggered escalation:** Routing applicants using **observable educational and life constraints**—applying a lower `[0.04, 0.65]` review floor when a student's school offers `<= 6` APs or they work/caregive `>= 10` hours/week, and `[0.20, 0.65]` otherwise (assuming **92%** human review accuracy)—escalates just **6.4%** of applications (193 of 3,000). Without changing the underlying scoring model, this cuts non-traditional wrongful auto-rejections from **68.5% to 50.0%** (a **27.0% relative drop**), trims traditional wrongful rejections from **12.0% to 8.4%**, and lifts overall accuracy from **82.5% to 85.5%**.
-- **50-cycle compounding dynamics (`src/longitudinal_sim.py`):** Extending the audit across `t = 50` recurring cycles (`n = 1,000`, retraining on admitted outcomes) shows how single-cycle screening bias compounds into a self-fulfilling prophecy. Under the **Automated Baseline (0% HITL)**, the subgroup quality gap (`Trad - NonTrad`) more than triples (`+0.0134` → `+0.0426`) even as headline accuracy climbs to `98.9%` because early winners lock into the top 20%. Under **Context-Aware Escalation (15.0% avg review)**, the widening quality gap is neutralized (`+0.0134` → `-0.0144`) and non-traditional wrongful rejections fall from `38.8%` to `0.0%`.
+- **50-cycle dynamics (`src/longitudinal_sim.py`):** With the same ground-truth readiness definition as the single-cycle example, the **Automated Baseline** ends with a small quality gap (`+0.0134` → `+0.0013`) and non-traditional FNR falls from `65.0%` to `20.6%`. **Context-Aware Escalation** averages `16.4%` review; its non-traditional FNR falls from `45.8%` to `0.0%`, while the quality gap reverses (`+0.0134` → `-0.0487`). This is a useful teaching result: a lower FNR does not by itself establish that a policy is fair overall.
 
 ## Charts
 
@@ -37,19 +37,32 @@ To test human-in-the-loop escalation at the single-institution level, the sandbo
 
 ## Quickstart
 
+Requires Python 3.9 or newer. The dependency ranges include the notebook and test tools.
+
 ```bash
 git clone https://github.com/jasongoldfarb/admissions-validation-sandbox.git
 cd admissions-validation-sandbox
+python -m venv .venv
+# macOS/Linux
+source .venv/bin/activate
+# Windows PowerShell: .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-
-python src/baseline_repro.py
-python src/audit_borderline.py
-python src/escalation_policy.py
-python src/longitudinal_sim.py
-python src/make_charts.py
 ```
 
-Or launch the interactive notebook locally:
+Run the complete workflow in dependency order:
+
+```bash
+python src/run_pipeline.py
+python -m pytest -v
+```
+
+By default, generated files go to the repository's `outputs/` directory, which contains the checked-in reference outputs. To keep a run separate:
+
+```bash
+python src/run_pipeline.py --output-dir /tmp/admissions-sandbox-run
+```
+
+Individual scripts can also be run in order; when invoked by their script path, they read and write the repository's `outputs/` directory regardless of the current working directory. To explore interactively, launch the notebook locally:
 
 ```bash
 jupyter notebook walkthrough.ipynb
@@ -63,18 +76,21 @@ For module-level documentation, function signatures, and parameter details, see 
 admissions-validation-sandbox/
 ├── src/
 │   ├── __init__.py             # Enables clean module imports from walkthrough.ipynb
-│   ├── README.md               # Module-level reference for all 5 pipeline scripts
+│   ├── README.md               # Module-level reference for pipeline modules and runner
 │   ├── baseline_repro.py       # Session 1: Baseline simulation (paper priors) & subgroup metrics
 │   ├── audit_borderline.py     # Session 2: Score-zone slice & flattened-context audit
 │   ├── escalation_policy.py    # Session 3: Observable context-proxy review band simulation
 │   ├── make_charts.py          # Session 4: Generate PNG visuals from simulation outputs
-│   └── longitudinal_sim.py     # Session 5: 50-cycle longitudinal dynamics (Table 2 extension)
+│   ├── longitudinal_sim.py     # Session 5: 50-cycle longitudinal dynamics (Table 2 extension)
+│   ├── paths.py                # Shared repository-relative output path handling
+│   └── run_pipeline.py         # One-command end-to-end runner
 ├── tests/
 │   ├── test_baseline_repro.py
 │   ├── test_audit_borderline.py
 │   ├── test_escalation_policy.py
 │   ├── test_make_charts.py
-│   └── test_longitudinal_sim.py
+│   ├── test_longitudinal_sim.py
+│   └── test_run_pipeline.py
 ├── outputs/                    # Generated CSVs and PNG charts
 ├── walkthrough.ipynb           # End-to-end narrated walkthrough & operational sensitivity sandbox
 ├── requirements.txt
@@ -83,7 +99,7 @@ admissions-validation-sandbox/
 
 ## Running Tests
 
-Run the `pytest` suite (32 tests verifying seed reproducibility, schema/bounds, longitudinal update math, edge cases, and isolated chart generation without modifying `outputs/`):
+Run the `pytest` suite (tests cover seed reproducibility, schema/bounds, longitudinal assumptions and updates, edge cases, chart generation, and the full pipeline from outside the repository; generated test files stay in temporary directories):
 
 ```bash
 python -m pytest -v
@@ -92,14 +108,20 @@ python -m pytest -v
 ## Limitations & Real-World Nuances
 
 - **Fixed seat capacity & yield:** Rescuing more qualified applicants via human review increases total admits in this unconstrained sandbox. At a selective university with a fixed freshman class size and yield target, lowering false negatives requires tightening the auto-admit bar or managing a waitlist (trading off FNR against FPR/over-enrollment risk).
-- **Idealized human review:** `src/escalation_policy.py` models human readers with a symmetric **92%** accuracy rate across cohorts. Real admissions committees experience reader fatigue, inter-rater variance, and their own cognitive biases.
+- **Idealized human review:** `src/escalation_policy.py` models human readers with a symmetric **92%** accuracy rate across cohorts. In this simulation, reviewer decisions use `true_qualified` as an oracle; actual readers do not observe ground truth. Real admissions committees experience reader fatigue, inter-rater variance, and their own cognitive biases.
+- **Synthetic context proxies:** AP offerings and work/caregiving hours are simulated signals correlated with cohort. The cohort-blind routing rule is an illustration, not evidence that these proxies or thresholds are fair, valid, or appropriate in real admissions.
+- **Longitudinal experiment:** Both regimes start from the same population and use separate seeded random streams for feature generation, reviewer decisions, and environmental shocks. Review draws therefore do not shift later feature or shock draws; applicant states still diverge as decisions compound.
 - **Post-hoc escalation vs. upstream feature engineering:** Even after targeted escalation, **50.0%** of qualified non-traditional applicants remain auto-rejected below `0.04`. In production, context-aware escalation should be paired with upstream feature engineering (such as replacing raw AP counts with `ap_utilization = ap_courses_taken / school_ap_cap`).
+
+## Generated Outputs
+
+The CSVs and charts in `outputs/` are checked-in reference artifacts for the README and notebook. Running the pipeline or notebook overwrites those files when using the default output directory. Use the runner's `--output-dir` option to generate a separate pipeline run without changing the reference artifacts.
 
 ## "Try This Next" Winter Break Challenge
 
 1. **Test human review accuracy sensitivity:** Edit `human_acc` in `walkthrough.ipynb` (Section 5) or `src/escalation_policy.py` (e.g., `0.85` vs. `0.95`)—at what human review accuracy does escalating borderline cases stop improving overall accuracy?
 2. **Hidden Confounder / Omitted Variable Experiment:** Add an unmeasured **legacy / institutional-familiarity boost** into `historical_admit` without exposing it to the model. How does that shift the decision boundary and change which applicants land inside or outside the review band?
-3. **Capacity-Constrained Escalation:** Suppose human admissions readers can only review **5%** of total applications. Design a ranking or context-triggered rule to pick *which* 5% get human eyes first.
+3. **Capacity-Constrained Escalation:** Suppose human admissions readers can only review **5%** of total applications. Design a ranking or context-triggered rule to select which applications get human review first.ign a ranking or context-triggered rule to pick *which* 5% get human eyes first.
 
 ## Research Attribution
 

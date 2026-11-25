@@ -88,8 +88,7 @@ def test_summarize_metrics_zero_positives_edge_case():
 
 def test_main_writes_holdout_csv(tmp_path, monkeypatch):
     """main() writes outputs/baseline_applicants.csv in an isolated temp directory."""
-    monkeypatch.chdir(tmp_path)
-    baseline_repro.main()
+    baseline_repro.main(tmp_path / "outputs")
 
     out_file = tmp_path / "outputs" / "baseline_applicants.csv"
     assert out_file.exists()

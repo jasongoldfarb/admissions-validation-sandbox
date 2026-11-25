@@ -47,10 +47,76 @@ def test_run_simulation_invalid_regime_raises():
         longitudinal_sim.run_simulation(n_samples=100, n_cycles=2, regime="invalid")
 
 
+def test_run_simulation_reproducible_with_separate_random_streams():
+    """Each regime is repeatable with fixed seeds."""
+    for regime in ("baseline", "context_aware_hitl"):
+        first = longitudinal_sim.run_simulation(
+            n_samples=200, n_cycles=5, regime=regime, seed=42
+        )
+        second = longitudinal_sim.run_simulation(
+            n_samples=200, n_cycles=5, regime=regime, seed=42
+        )
+        pd.testing.assert_frame_equal(first, second)
+
+
+def test_environmental_random_streams_match_across_regimes(monkeypatch):
+    """Review draws do not shift shared feature-generation or shock streams."""
+    feature_states = []
+    shock_states = []
+    original_features = longitudinal_sim.compute_cycle_features
+    original_updates = longitudinal_sim.apply_quality_updates
+
+    def capture_features(state_df, rng):
+        feature_states.append(repr(rng.bit_generator.state))
+        return original_features(state_df, rng)
+
+    def capture_updates(*args, **kwargs):
+        shock_states.append(repr(kwargs["rng"].bit_generator.state))
+        return original_updates(*args, **kwargs)
+
+    monkeypatch.setattr(longitudinal_sim, "compute_cycle_features", capture_features)
+    monkeypatch.setattr(longitudinal_sim, "apply_quality_updates", capture_updates)
+
+    longitudinal_sim.run_simulation(n_samples=100, n_cycles=3, regime="baseline", seed=42)
+    baseline_feature_states = feature_states.copy()
+    baseline_shock_states = shock_states.copy()
+
+    feature_states.clear()
+    shock_states.clear()
+    longitudinal_sim.run_simulation(
+        n_samples=100, n_cycles=3, regime="context_aware_hitl", seed=42
+    )
+
+    assert feature_states == baseline_feature_states
+    assert shock_states == baseline_shock_states
+
+
+def test_cycle_qualification_uses_contextual_readiness(monkeypatch):
+    """The longitudinal cycle passes the same context signals as the baseline scorer."""
+    state = longitudinal_sim.initialize_ecosystem(n_samples=20, seed=42)
+    observed = {}
+    original = longitudinal_sim.compute_true_readiness_score
+
+    def capture_readiness(z_acad, z_nonacad, ap_utilization, outside_hours, upward, rng):
+        observed["ap_utilization"] = ap_utilization.copy()
+        observed["outside_hours"] = outside_hours.copy()
+        observed["upward"] = upward.copy()
+        return original(z_acad, z_nonacad, ap_utilization, outside_hours, upward, rng)
+
+    monkeypatch.setattr(longitudinal_sim, "compute_true_readiness_score", capture_readiness)
+    result = longitudinal_sim.compute_cycle_features(state, np.random.default_rng(7))
+
+    assert observed["ap_utilization"] == pytest.approx(
+        result["ap_courses_taken"].to_numpy()
+        / np.maximum(result["school_ap_cap"].to_numpy(), 1)
+    )
+    assert observed["outside_hours"] == pytest.approx(state["outside_hours_wk"].to_numpy())
+    assert observed["upward"] == pytest.approx(state["upward_trajectory"].to_numpy())
+
+
 def test_main_writes_longitudinal_csv(tmp_path, monkeypatch):
     """main() writes outputs/longitudinal_dynamics.csv with 100 rows (50 per regime)."""
-    monkeypatch.chdir(tmp_path)
-    longitudinal_sim.main()
+    longitudinal_sim.main(tmp_path / "outputs")
 
     out_file = tmp_path / "outputs" / "longitudinal_dynamics.csv"
     assert out_file.exists()

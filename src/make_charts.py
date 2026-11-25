@@ -7,9 +7,15 @@ to produce:
 """
 
 from pathlib import Path
+from typing import Optional
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
+if __package__:
+    from .paths import get_output_dir
+else:
+    from paths import get_output_dir
 
 
 def _set_style() -> None:
@@ -293,9 +299,10 @@ def make_chart3(long_df: pd.DataFrame, out_path: Path) -> None:
     plt.close(fig)
 
 
-def main() -> None:
-    audited_path = Path("outputs/audited_applicants.csv")
-    tradeoff_path = Path("outputs/escalation_tradeoff.csv")
+def main(output_dir: Optional[Path] = None) -> None:
+    output_dir = get_output_dir(output_dir)
+    audited_path = output_dir / "audited_applicants.csv"
+    tradeoff_path = output_dir / "escalation_tradeoff.csv"
     if not audited_path.exists() or not tradeoff_path.exists():
         raise FileNotFoundError(
             "Missing Session 2/3 CSV outputs. Run baseline_repro.py, "
@@ -305,7 +312,7 @@ def main() -> None:
     audited_df = pd.read_csv(audited_path)
     tradeoff_df = pd.read_csv(tradeoff_path)
 
-    out_dir = Path("outputs")
+    out_dir = output_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
     c1_path = out_dir / "chart1_aggregate_vs_subgroup.png"
@@ -314,7 +321,7 @@ def main() -> None:
     make_chart1(audited_df, tradeoff_df, c1_path)
     make_chart2(audited_df, tradeoff_df, c2_path)
     saved = [c1_path, c2_path]
-    long_path = Path("outputs/longitudinal_dynamics.csv")
+    long_path = output_dir / "longitudinal_dynamics.csv"
     if long_path.exists():
         c3_path = out_dir / "chart3_longitudinal_dynamics.png"
         make_chart3(pd.read_csv(long_path), c3_path)

@@ -30,9 +30,8 @@ def test_assign_zone_custom_thresholds():
 
 def test_main_raises_when_baseline_missing(tmp_path, monkeypatch):
     """Fail fast with a clear FileNotFoundError if Session 1 output is missing."""
-    monkeypatch.chdir(tmp_path)
     with pytest.raises(FileNotFoundError, match="baseline_applicants.csv"):
-        audit_borderline.main()
+        audit_borderline.main(tmp_path / "outputs")
 
 
 def test_main_writes_audited_csv_with_derived_columns(tmp_path, monkeypatch):
@@ -58,7 +57,7 @@ def test_main_writes_audited_csv_with_derived_columns(tmp_path, monkeypatch):
     )
     sample_df.to_csv(out_dir / "baseline_applicants.csv", index=False)
 
-    audit_borderline.main()
+    audit_borderline.main(out_dir)
 
     audited_path = out_dir / "audited_applicants.csv"
     assert audited_path.exists()

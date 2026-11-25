@@ -6,8 +6,14 @@ qualitative context drives wrongful auto-rejections on borderline applicants.
 """
 
 from pathlib import Path
+from typing import Optional
 import numpy as np
 import pandas as pd
+
+if __package__:
+    from .paths import get_output_dir
+else:
+    from paths import get_output_dir
 
 
 def assign_zone(prob: float, low: float = 0.20, high: float = 0.65) -> str:
@@ -18,8 +24,9 @@ def assign_zone(prob: float, low: float = 0.20, high: float = 0.65) -> str:
     return "3_clear_admit (>0.65)"
 
 
-def main() -> None:
-    input_path = Path("outputs/baseline_applicants.csv")
+def main(output_dir: Optional[Path] = None) -> None:
+    output_dir = get_output_dir(output_dir)
+    input_path = output_dir / "baseline_applicants.csv"
     if not input_path.exists():
         raise FileNotFoundError(
             f"Missing {input_path}. Run `python src/baseline_repro.py` first."
@@ -94,7 +101,7 @@ def main() -> None:
         print(f"{label:<46} | {v1:>15} | {v2:>14}")
 
     print("=" * 72)
-    output_path = Path("outputs/audited_applicants.csv")
+    output_path = output_dir / "audited_applicants.csv"
     df.to_csv(output_path, index=False)
     print(f"\nSaved audited dataset with decision zones to: {output_path}")
 
