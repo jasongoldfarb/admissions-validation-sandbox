@@ -86,14 +86,19 @@ def test_summarize_metrics_zero_positives_edge_case():
     assert metrics["missed_qualified_count"] == 0
 
 
-def test_main_writes_holdout_csv(tmp_path, monkeypatch):
-    """main() writes outputs/baseline_applicants.csv in an isolated temp directory."""
-    baseline_repro.main(tmp_path / "outputs")
+def test_main_writes_capacity_limited_holdout_csv(tmp_path):
+    """main() records model eligibility and admits only up to the configured capacity."""
+    baseline_repro.main(tmp_path / "outputs", capacity_fraction=0.10)
 
     out_file = tmp_path / "outputs" / "baseline_applicants.csv"
     assert out_file.exists()
 
     holdout = pd.read_csv(out_file)
     assert len(holdout) == 3_000
-    assert {"pred_prob", "pred_admit"}.issubset(holdout.columns)
+    assert {"pred_prob", "model_eligible", "pred_admit"}.issubset(holdout.columns)
     assert holdout["pred_prob"].between(0.0, 1.0).all()
+    assert holdout["pred_admit"].sum() == 300
+    assert holdout["model_eligible"].sum() == 300
+    assert holdout.loc[holdout["pred_admit"] == 1, "pred_prob"].min() >= holdout.loc[
+        holdout["pred_admit"] == 0, "pred_prob"
+    ].max()

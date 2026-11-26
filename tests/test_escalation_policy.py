@@ -41,8 +41,12 @@ def test_zero_escalation_matches_baseline():
     df = _sample_audited_df()
     empty_mask = pd.Series(False, index=df.index)
 
-    res_low = escalation_policy.evaluate_policy(df, empty_mask, human_review_accuracy=0.50, seed=42)
-    res_high = escalation_policy.evaluate_policy(df, empty_mask, human_review_accuracy=1.00, seed=42)
+    res_low = escalation_policy.evaluate_policy(
+        df, empty_mask, human_review_accuracy=0.50, seed=42, capacity_fraction=1.0
+    )
+    res_high = escalation_policy.evaluate_policy(
+        df, empty_mask, human_review_accuracy=1.00, seed=42, capacity_fraction=1.0
+    )
 
     assert res_low == res_high
     assert res_low["escalated_count"] == 0
@@ -53,11 +57,13 @@ def test_zero_escalation_matches_baseline():
 
 
 def test_full_escalation_with_perfect_human_reviewer():
-    """Escalating 100% of rows to a 100%-accurate reviewer yields 100% accuracy and 0% FNR."""
+    """Perfect review makes only qualified applicants eligible within the seat cap."""
     df = _sample_audited_df()
     full_mask = pd.Series(True, index=df.index)
 
-    res = escalation_policy.evaluate_policy(df, full_mask, human_review_accuracy=1.0, seed=42)
+    res = escalation_policy.evaluate_policy(
+        df, full_mask, human_review_accuracy=1.0, seed=42, capacity_fraction=1.0
+    )
 
     assert res["escalated_count"] == len(df)
     assert res["escalated_pct"] == pytest.approx(1.0)
@@ -67,14 +73,32 @@ def test_full_escalation_with_perfect_human_reviewer():
 
 
 def test_higher_human_accuracy_improves_overall_accuracy():
-    """Higher human_review_accuracy produces strictly higher accuracy under full escalation."""
+    """Higher human accuracy improves selection accuracy when all seats can be filled."""
     df = _sample_audited_df(n=500)
     full_mask = pd.Series(True, index=df.index)
 
-    low_acc = escalation_policy.evaluate_policy(df, full_mask, human_review_accuracy=0.60, seed=42)
-    high_acc = escalation_policy.evaluate_policy(df, full_mask, human_review_accuracy=0.95, seed=42)
+    low_acc = escalation_policy.evaluate_policy(
+        df, full_mask, human_review_accuracy=0.60, seed=42, capacity_fraction=1.0
+    )
+    high_acc = escalation_policy.evaluate_policy(
+        df, full_mask, human_review_accuracy=0.95, seed=42, capacity_fraction=1.0
+    )
 
     assert high_acc["overall_accuracy"] > low_acc["overall_accuracy"]
+
+
+def test_evaluate_policy_respects_capacity_and_reports_unfilled_seats():
+    df = _sample_audited_df(n=20)
+    no_escalation = pd.Series(False, index=df.index)
+
+    result = escalation_policy.evaluate_policy(
+        df, no_escalation, capacity_fraction=0.10
+    )
+
+    assert result["capacity_seats"] == 2
+    assert result["admitted_count"] <= result["capacity_seats"]
+    assert result["unfilled_seats"] == result["capacity_seats"] - result["admitted_count"]
+    assert result["eligible_count"] == int(df["pred_admit"].sum())
 
 
 def test_main_raises_when_audited_missing(tmp_path, monkeypatch):
@@ -83,14 +107,14 @@ def test_main_raises_when_audited_missing(tmp_path, monkeypatch):
         escalation_policy.main(tmp_path / "outputs")
 
 
-def test_main_writes_tradeoff_csv(tmp_path, monkeypatch):
-    """main() writes outputs/escalation_tradeoff.csv with 7 standard bands + 1 context policy."""
+def test_main_writes_capacity_tradeoff_csv(tmp_path):
+    """main() writes policy metrics with a shared seat-cap target."""
     out_dir = tmp_path / "outputs"
     out_dir.mkdir()
 
     _sample_audited_df(n=200).to_csv(out_dir / "audited_applicants.csv", index=False)
 
-    escalation_policy.main(out_dir)
+    escalation_policy.main(out_dir, capacity_fraction=0.10)
 
     out_file = out_dir / "escalation_tradeoff.csv"
     assert out_file.exists()
@@ -101,6 +125,12 @@ def test_main_writes_tradeoff_csv(tmp_path, monkeypatch):
         "policy",
         "escalated_pct",
         "escalated_count",
+        "capacity_seats",
+        "model_shortlisted_count",
+        "eligible_count",
+        "admitted_count",
+        "unfilled_seats",
+        "capacity_fill_pct",
         "overall_accuracy",
         "trad_fnr",
         "nontrad_fnr",
@@ -108,3 +138,4 @@ def test_main_writes_tradeoff_csv(tmp_path, monkeypatch):
 
     for col in ["escalated_pct", "overall_accuracy", "trad_fnr", "nontrad_fnr"]:
         assert tradeoff[col].between(0.0, 1.0).all()
+    assert (tradeoff["admitted_count"] <= tradeoff["capacity_seats"]).all()

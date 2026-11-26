@@ -39,12 +39,27 @@ def test_run_simulation_schema_and_regimes():
     assert hitl["escalated_pct"].mean() > 0.0
     assert base["overall_accuracy"].between(0.0, 1.0).all()
     assert hitl["nontrad_fnr"].between(0.0, 1.0).all()
+    assert (base["admitted_count"] <= base["capacity_seats"]).all()
+    assert (hitl["admitted_count"] <= hitl["capacity_seats"]).all()
 
 
 def test_run_simulation_invalid_regime_raises():
     """Unknown regime raises ValueError."""
     with pytest.raises(ValueError, match="Unknown regime"):
         longitudinal_sim.run_simulation(n_samples=100, n_cycles=2, regime="invalid")
+
+
+def test_run_simulation_capacity_fraction_is_configurable():
+    result = longitudinal_sim.run_simulation(
+        n_samples=200,
+        n_cycles=3,
+        regime="baseline",
+        capacity_fraction=0.10,
+        seed=42,
+    )
+
+    assert (result["capacity_seats"] == 20).all()
+    assert (result["admitted_count"] <= 20).all()
 
 
 def test_run_simulation_reproducible_with_separate_random_streams():
@@ -123,3 +138,4 @@ def test_main_writes_longitudinal_csv(tmp_path, monkeypatch):
     df = pd.read_csv(out_file)
     assert len(df) == 100
     assert set(df["regime"].unique()) == {"baseline", "context_aware_hitl"}
+    assert (df["admitted_count"] <= df["capacity_seats"]).all()

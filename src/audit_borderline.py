@@ -1,8 +1,8 @@
 """
-Session 2: Borderline & Subgroup Context Audit
+Session 2: Score-Zone & Subgroup Context Audit
 Loads the holdout predictions from Session 1 (outputs/baseline_applicants.csv),
 slices error rates across probability zones, and quantifies how flattened
-qualitative context drives wrongful auto-rejections on borderline applicants.
+qualitative context relates to wrongful auto-rejections across score zones.
 """
 
 from pathlib import Path
@@ -18,10 +18,10 @@ else:
 
 def assign_zone(prob: float, low: float = 0.20, high: float = 0.65) -> str:
     if prob < low:
-        return "1_clear_reject (<0.20)"
+        return f"1_low_score (<{low:.2f})"
     if prob <= high:
-        return "2_borderline (0.20-0.65)"
-    return "3_clear_admit (>0.65)"
+        return f"2_review_range ({low:.2f}-{high:.2f})"
+    return f"3_high_score (>{high:.2f})"
 
 
 def main(output_dir: Optional[Path] = None) -> None:
@@ -38,11 +38,11 @@ def main(output_dir: Optional[Path] = None) -> None:
     df["wrongful_reject"] = ((df["true_qualified"] == 1) & (df["pred_admit"] == 0)).astype(int)
 
     print("=" * 72)
-    print("SESSION 2: BORDERLINE BAND & QUALITATIVE CONTEXT AUDIT")
+    print("SESSION 2: SCORE-ZONE & QUALITATIVE CONTEXT AUDIT")
     print("=" * 72)
 
     # 1. Zone breakdown across the whole pool
-    print("\n1. SCORE DISTRIBUTION & ERROR CONCENTRATION BY DECISION ZONE")
+    print("\n1. SCORE DISTRIBUTION & ERROR CONCENTRATION BY SCORE ZONE")
     print("-" * 72)
     zone_summary = (
         df.groupby("zone", as_index=False)
@@ -103,7 +103,7 @@ def main(output_dir: Optional[Path] = None) -> None:
     print("=" * 72)
     output_path = output_dir / "audited_applicants.csv"
     df.to_csv(output_path, index=False)
-    print(f"\nSaved audited dataset with decision zones to: {output_path}")
+    print(f"\nSaved audited dataset with score zones to: {output_path}")
 
 
 if __name__ == "__main__":

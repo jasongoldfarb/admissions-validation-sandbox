@@ -30,7 +30,7 @@ def make_chart1(audited_df: pd.DataFrame, tradeoff_df: pd.DataFrame, out_path: P
     """Plot headline accuracy vs. subgroup wrongful auto-rejection rates."""
     overall_acc = (audited_df["true_qualified"] == audited_df["pred_admit"]).mean() * 100
 
-    base_row = tradeoff_df[tradeoff_df["policy"] == "No Escalation (Baseline)"].iloc[0]
+    base_row = tradeoff_df[tradeoff_df["policy"].str.startswith("No Escalation")].iloc[0]
     ctx_row = tradeoff_df[tradeoff_df["policy"].str.startswith("Context-Aware Band")].iloc[0]
 
     labels = [
@@ -54,7 +54,7 @@ def make_chart1(audited_df: pd.DataFrame, tradeoff_df: pd.DataFrame, out_path: P
     ax.set_ylim(0, 105)
     ax.set_ylabel("Percentage (%)", fontsize=11, fontweight="bold")
     ax.set_title(
-        "The Illusion of Aggregate Accuracy: Subgroup Blind Spots & Escalation Impact",
+        "Capacity-Constrained Performance: Subgroup Blind Spots & Escalation Impact",
         fontsize=13,
         fontweight="bold",
         pad=14,
@@ -92,7 +92,7 @@ def make_chart1(audited_df: pd.DataFrame, tradeoff_df: pd.DataFrame, out_path: P
 
 def make_chart2(audited_df: pd.DataFrame, tradeoff_df: pd.DataFrame, out_path: Path) -> None:
     """2-panel Cost vs. Payoff storytelling chart for Context-Aware Escalation."""
-    base_row = tradeoff_df[tradeoff_df["policy"] == "No Escalation (Baseline)"].iloc[0]
+    base_row = tradeoff_df[tradeoff_df["policy"].str.startswith("No Escalation")].iloc[0]
     ctx_row = tradeoff_df[tradeoff_df["policy"].str.startswith("Context-Aware Band")].iloc[0]
 
     acc_col = next(
@@ -134,7 +134,12 @@ def make_chart2(audited_df: pd.DataFrame, tradeoff_df: pd.DataFrame, out_path: P
     )
     ax_cost.set_ylim(0, 108)
     ax_cost.set_ylabel("Share of Applications (%)", fontsize=10.5, fontweight="bold")
-    ax_cost.set_title("1. The Cost: Human Workload", fontsize=11.5, fontweight="bold", pad=10)
+    ax_cost.set_title(
+        "1. Review Workload & Capacity",
+        fontsize=11.5,
+        fontweight="bold",
+        pad=10,
+    )
     ax_cost.spines["top"].set_visible(False)
     ax_cost.spines["right"].set_visible(False)
     ax_cost.grid(axis="x", visible=False)
@@ -160,6 +165,17 @@ def make_chart2(audited_df: pd.DataFrame, tradeoff_df: pd.DataFrame, out_path: P
         bbox=dict(boxstyle="round,pad=0.35", facecolor="#eafaf1", edgecolor="#1e8449", lw=1),
     )
     ax_cost.set_xlim(-0.55, 1.35)
+    ax_cost.text(
+        0.5,
+        -0.10,
+        f"Seats filled: {ctx_row['admitted_count']:,} / {ctx_row['capacity_seats']:,}",
+        transform=ax_cost.transAxes,
+        ha="center",
+        va="top",
+        fontsize=9.5,
+        fontweight="bold",
+        color="#334e68",
+    )
 
     # --- RIGHT PANEL: Validation Payoff (Before vs. After) ---
     metrics = [
@@ -222,7 +238,7 @@ def make_chart2(audited_df: pd.DataFrame, tradeoff_df: pd.DataFrame, out_path: P
         )
 
     fig.suptitle(
-        "Targeted Human-in-the-Loop Escalation: Small Review Lift, Big Fairness Payoff",
+        "Targeted Human Review Under a Fixed Admission Capacity",
         fontsize=13.5,
         fontweight="bold",
         y=0.98,
@@ -288,8 +304,10 @@ def make_chart3(long_df: pd.DataFrame, out_path: Path) -> None:
     ax_fnr.spines["right"].set_visible(False)
     ax_fnr.legend(loc="upper right", frameon=True, fontsize=9.2)
 
+    capacity_fraction = float(long_df["capacity_fraction"].iloc[0])
     fig.suptitle(
-        "50-Cycle Longitudinal Dynamics (Table 2 Extension: dQ+ = +0.05, dQ- = -0.05)",
+        f"50-Cycle Dynamics under {capacity_fraction:.0%} Admission Capacity "
+        "(dQ+ = +0.05, dQ- = -0.05)",
         fontsize=13,
         fontweight="bold",
         y=0.98,

@@ -7,13 +7,13 @@ from src import audit_borderline
 @pytest.mark.parametrize(
     "prob,expected",
     [
-        (0.0, "1_clear_reject (<0.20)"),
-        (0.199, "1_clear_reject (<0.20)"),
-        (0.20, "2_borderline (0.20-0.65)"),
-        (0.50, "2_borderline (0.20-0.65)"),
-        (0.65, "2_borderline (0.20-0.65)"),
-        (0.651, "3_clear_admit (>0.65)"),
-        (1.0, "3_clear_admit (>0.65)"),
+        (0.0, "1_low_score (<0.20)"),
+        (0.199, "1_low_score (<0.20)"),
+        (0.20, "2_review_range (0.20-0.65)"),
+        (0.50, "2_review_range (0.20-0.65)"),
+        (0.65, "2_review_range (0.20-0.65)"),
+        (0.651, "3_high_score (>0.65)"),
+        (1.0, "3_high_score (>0.65)"),
     ],
 )
 def test_assign_zone_default_boundaries(prob, expected):
@@ -23,9 +23,9 @@ def test_assign_zone_default_boundaries(prob, expected):
 
 def test_assign_zone_custom_thresholds():
     """Custom low/high cutoffs shift zone assignment as expected."""
-    assert audit_borderline.assign_zone(0.10, low=0.15, high=0.80) == "1_clear_reject (<0.20)"
-    assert audit_borderline.assign_zone(0.75, low=0.15, high=0.80) == "2_borderline (0.20-0.65)"
-    assert audit_borderline.assign_zone(0.85, low=0.15, high=0.80) == "3_clear_admit (>0.65)"
+    assert audit_borderline.assign_zone(0.10, low=0.15, high=0.80) == "1_low_score (<0.15)"
+    assert audit_borderline.assign_zone(0.75, low=0.15, high=0.80) == "2_review_range (0.15-0.80)"
+    assert audit_borderline.assign_zone(0.85, low=0.15, high=0.80) == "3_high_score (>0.80)"
 
 
 def test_main_raises_when_baseline_missing(tmp_path, monkeypatch):

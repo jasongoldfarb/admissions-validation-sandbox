@@ -14,8 +14,10 @@ from sklearn.metrics import accuracy_score, confusion_matrix
 
 if __package__:
     from .paths import get_output_dir
+    from .selection_policy import DEFAULT_CAPACITY_FRACTION, select_with_capacity
 else:
     from paths import get_output_dir
+    from selection_policy import DEFAULT_CAPACITY_FRACTION, select_with_capacity
 
 
 def evaluate_policy(
@@ -23,10 +25,12 @@ def evaluate_policy(
     escalate_mask: pd.Series,
     human_review_accuracy: float = 0.92,
     seed: int = 42,
+    capacity_fraction: float = DEFAULT_CAPACITY_FRACTION,
 ) -> dict:
-    """Apply an escalation mask and simulate human review with realistic accuracy."""
+    """Apply reviewer overrides, then select eligible applicants within capacity."""
     rng = np.random.default_rng(seed)
-    final_pred = df["pred_admit"].to_numpy().copy()
+    initial_eligibility = df.get("model_eligible", df["pred_admit"]).to_numpy(dtype=bool)
+    final_eligibility = initial_eligibility.copy()
 
     esc_idx = np.where(escalate_mask.to_numpy())[0]
     true_vals = df["true_qualified"].to_numpy()[esc_idx]
@@ -34,7 +38,11 @@ def evaluate_policy(
     # Human reviewer gets true readiness right with probability `human_review_accuracy`
     human_correct = rng.binomial(1, human_review_accuracy, size=len(esc_idx))
     human_decisions = np.where(human_correct == 1, true_vals, 1 - true_vals)
-    final_pred[esc_idx] = human_decisions
+    final_eligibility[esc_idx] = human_decisions
+
+    final_pred, target_seats = select_with_capacity(
+        df["pred_prob"].to_numpy(), final_eligibility, capacity_fraction
+    )
 
     eval_df = df.copy()
     eval_df["final_pred"] = final_pred
@@ -57,6 +65,14 @@ def evaluate_policy(
     return {
         "escalated_pct": float(escalate_mask.mean()),
         "escalated_count": int(escalate_mask.sum()),
+        "capacity_fraction": capacity_fraction,
+        "capacity_seats": target_seats,
+        "model_shortlisted_count": int(initial_eligibility.sum()),
+        "eligible_count": int(final_eligibility.sum()),
+        "admitted_count": int(final_pred.sum()),
+        "unfilled_seats": target_seats - int(final_pred.sum()),
+        "admitted_pct": float(final_pred.mean()),
+        "capacity_fill_pct": float(final_pred.sum() / target_seats) if target_seats else 0.0,
         "overall_accuracy": overall_acc,
         "overall_fnr": overall_fnr,
         "trad_accuracy": trad_acc,
@@ -68,7 +84,10 @@ def evaluate_policy(
     }
 
 
-def main(output_dir: Optional[Path] = None) -> None:
+def main(
+    output_dir: Optional[Path] = None,
+    capacity_fraction: float = DEFAULT_CAPACITY_FRACTION,
+) -> None:
     output_dir = get_output_dir(output_dir)
     input_path = output_dir / "audited_applicants.csv"
     if not input_path.exists():
@@ -80,12 +99,15 @@ def main(output_dir: Optional[Path] = None) -> None:
     human_acc = 0.92
 
     print("=" * 78)
-    print(f"SESSION 3: HUMAN-IN-THE-LOOP ESCALATION SIMULATION (Human Acc = {human_acc:.0%})")
+    print(
+        f"SESSION 3: CAPACITY-CONSTRAINED HITL SIMULATION "
+        f"(Capacity = {capacity_fraction:.0%}, Human Acc = {human_acc:.0%})"
+    )
     print("=" * 78)
 
     # 1. Sweep standard probability bands
     bands = [
-        ("No Escalation (Baseline)", 0.50, 0.50),
+        ("No Escalation (Capacity Baseline)", None, None),
         ("Narrow Band [0.35, 0.65]", 0.35, 0.65),
         ("Moderate Band [0.20, 0.65]", 0.20, 0.65),
         ("Wide Band [0.10, 0.70]", 0.10, 0.70),
@@ -102,13 +124,18 @@ def main(output_dir: Optional[Path] = None) -> None:
         f"{'Trad FNR':>8} | {'NonTrad FNR':>11}"
     )
     print("-" * 78)
-
     for label, low, high in bands:
-        if low == high:
+        if low is None or high is None:
             mask = pd.Series(False, index=df.index)
         else:
             mask = (df["pred_prob"] >= low) & (df["pred_prob"] <= high)
-        stats = evaluate_policy(df, mask, human_review_accuracy=human_acc, seed=42)
+        stats = evaluate_policy(
+            df,
+            mask,
+            human_review_accuracy=human_acc,
+            seed=42,
+            capacity_fraction=capacity_fraction,
+        )
         stats["policy"] = label
         stats["band_low"] = low
         stats["band_high"] = high
@@ -129,7 +156,13 @@ def main(output_dir: Optional[Path] = None) -> None:
         ((~has_context_constraint) & (df["pred_prob"] >= 0.20) & (df["pred_prob"] <= 0.65))
         | (has_context_constraint & (df["pred_prob"] >= 0.04) & (df["pred_prob"] <= 0.65))
     )
-    ctx_stats = evaluate_policy(df, context_mask, human_review_accuracy=human_acc, seed=42)
+    ctx_stats = evaluate_policy(
+        df,
+        context_mask,
+        human_review_accuracy=human_acc,
+        seed=42,
+        capacity_fraction=capacity_fraction,
+    )
     ctx_stats["policy"] = (
         "Context-Aware Band (AP Cap <=6 or Work >=10h: [0.04,0.65] / Else: [0.20,0.65])"
     )
@@ -144,6 +177,11 @@ def main(output_dir: Optional[Path] = None) -> None:
     print("-" * 78)
     print(f"Policy: {ctx_stats['policy']}")
     print(f"  Applications Escalated to Human Reader:   {ctx_stats['escalated_pct']:.1%} ({ctx_stats['escalated_count']:,} / {len(df):,})")
+    print(
+        f"  Seats Filled / Target:                    "
+        f"{curve_rows[0]['admitted_count']:,}/{curve_rows[0]['capacity_seats']:,} -> "
+        f"{ctx_stats['admitted_count']:,}/{ctx_stats['capacity_seats']:,}"
+    )
     print(f"  Overall System Accuracy:                  {curve_rows[0]['overall_accuracy']:.1%} -> {ctx_stats['overall_accuracy']:.1%}")
     print(f"  Traditional Wrongful Rejection (FNR):     {curve_rows[0]['trad_fnr']:.1%} -> {ctx_stats['trad_fnr']:.1%}")
     print(f"  Non-Traditional Wrongful Rejection (FNR): {baseline_nontrad_fnr:.1%} -> {ctx_stats['nontrad_fnr']:.1%} (-{fnr_reduction:.1%} relative drop)")

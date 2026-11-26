@@ -14,18 +14,17 @@ The applicant generator in `src/baseline_repro.py` and the 50-cycle extension in
 - **Subgroup share (NCES):** `1 - 7.8 / 15.4` (~49.4% non-traditional / underrepresented).
 - **SAT distribution (College Board):** Mean `1030`, SD `235`, rounded to the nearest 10.
 - **Equal underlying talent:** Identical academic and non-academic quality distributions (`N(0.5, 0.1)`) across cohorts.
-- **Selectivity threshold:** Top `20%` admit bar (`Tau1 = 20` Tier-1 cutoff).
+- **Readiness benchmark:** Top `20%` labeled qualified (`Tau1 = 20` Tier-1 cutoff); this ground-truth label is distinct from the configurable seat capacity.
 - **Longitudinal dynamics (Table 2):** `n = 1,000` individuals, `t = 50` recurring selection cycles, `∆Q+ = +0.05` (reward for admitted & qualified), `∆Q- = -0.05` (penalty for admitted & unqualified).
 
 To test human-in-the-loop escalation at the single-institution level, the sandbox translates the paper's group-level evaluation noise gap into concrete flattened-context variables (school AP caps, outside work/caregiving hours, and upward grade trajectories). Both the single-cycle and longitudinal examples use the same readiness definition: latent academic and non-academic quality, AP utilization, outside work/care hours, upward trajectory, and a noise term, with the top 20% labeled qualified each cycle.
 
-## Key Findings (Simulated Holdout, N = 3,000)
+## Key Findings (Simulated Holdout, N = 3,000; Capacity = 20%)
 
-- **Headline accuracy looks reassuring—and even deceptive:** The baseline screener trained on biased historical admissions data reaches **82.5% overall accuracy** (**81.8%** on traditional applicants and **83.2%** on non-traditional applicants).
-- **Subgroup blind spot:** Despite higher cohort accuracy, qualified **non-traditional applicants** face a **68.5%** wrongful auto-rejection rate (false negative rate), compared to **12.0%** for traditional applicants.
-- **Flattened context:** **206 of the 230** missed non-traditional candidates get pushed into the lowest predicted-probability bucket (`< 0.20`) because raw counts (APs taken, club leadership, cumulative GPA) miss school AP caps, heavy outside work/caregiving hours, and upward grade trajectories.
-- **Cohort-blind, context-triggered escalation:** Routing applicants using **observable educational and life constraints**—applying a lower `[0.04, 0.65]` review floor when a student's school offers `<= 6` APs or they work/caregive `>= 10` hours/week, and `[0.20, 0.65]` otherwise (assuming **92%** human review accuracy)—escalates just **6.4%** of applications (193 of 3,000). Without changing the underlying scoring model, this cuts non-traditional wrongful auto-rejections from **68.5% to 50.0%** (a **27.0% relative drop**), trims traditional wrongful rejections from **12.0% to 8.4%**, and lifts overall accuracy from **82.5% to 85.5%**.
-- **50-cycle dynamics (`src/longitudinal_sim.py`):** With the same ground-truth readiness definition as the single-cycle example, the **Automated Baseline** ends with a small quality gap (`+0.0134` → `+0.0013`) and non-traditional FNR falls from `65.0%` to `20.6%`. **Context-Aware Escalation** averages `16.4%` review; its non-traditional FNR falls from `45.8%` to `0.0%`, while the quality gap reverses (`+0.0134` → `-0.0487`). This is a useful teaching result: a lower FNR does not by itself establish that a policy is fair overall.
+- **Aggregate metrics conceal subgroup errors:** Overall accuracy is **82.5%** (**81.7%** traditional; **83.4%** non-traditional). Yet the non-traditional FNR is **67.6%**, versus **11.6%** traditional.
+- **Flattened context:** **206 of 227** missed qualified non-traditional candidates fall in the lowest probability zone (`< 0.20`), where school AP availability, work/care responsibilities, and grade trajectory are not captured by raw feature counts.
+- **Capacity is separate from the model score:** The model ranks applicants; by default the simulation targets **600 admits from 3,000**. The baseline selects the highest-scoring applicants up to that cap. The default contextual policy reviews **193 applicants (6.4%)**, fills all **600 seats**, and changes overall accuracy from **82.5% to 84.3%**. Non-traditional FNR moves from **67.6% to 61.9%** and traditional FNR from **11.6% to 8.4%**. The reviewer may change eligibility, but cannot increase the class beyond the configured cap.
+- **Capacity-constrained longitudinal dynamics (`src/longitudinal_sim.py`):** With 200 seats per 1,000 people each cycle, both regimes fill the capacity in the default seeded run. Baseline non-traditional FNR moves from `63.3%` (cycle 1) to `3.5%` (cycle 50), and its quality gap moves from `+0.0134` to `-0.0302`. Context-aware review averages `18.1%`; its non-traditional FNR moves from `55.8%` to `2.5%`, with quality gap moving from `+0.0134` to `-0.0370`. These synthetic outcomes are illustrative, not evidence that the policy is fair in practice.
 
 ## Charts
 
@@ -56,13 +55,15 @@ python src/run_pipeline.py
 python -m pytest -v
 ```
 
-By default, generated files go to the repository's `outputs/` directory, which contains the checked-in reference outputs. To keep a run separate:
+The default capacity is `20%` of the evaluation pool. Change it with `--capacity-fraction` (a value from `0` to `1`); probabilities rank applicants and the capacity limits the final selected count:
 
 ```bash
-python src/run_pipeline.py --output-dir /tmp/admissions-sandbox-run
+python src/run_pipeline.py --capacity-fraction 0.10 --output-dir /tmp/admissions-sandbox-run
 ```
 
-Individual scripts can also be run in order; when invoked by their script path, they read and write the repository's `outputs/` directory regardless of the current working directory. To explore interactively, launch the notebook locally:
+The model's historical `0.50` binary cutoff is no longer the admission decision. The baseline shortlist is the top-scoring capacity-sized group; for HITL, reviewer decisions can change shortlist eligibility before the final score ranking and capacity limit are applied.
+
+The selected count is the nearest whole applicant to `pool size × capacity fraction`; score ties are resolved by input order. If review leaves too few eligible applicants, seats can remain unfilled. Individual scripts also expose a `capacity_fraction` parameter; when invoked by their script path, they read and write the repository's `outputs/` directory regardless of the current working directory. To explore interactively, launch the notebook locally:
 
 ```bash
 jupyter notebook walkthrough.ipynb
@@ -83,6 +84,7 @@ admissions-validation-sandbox/
 │   ├── make_charts.py          # Session 4: Generate PNG visuals from simulation outputs
 │   ├── longitudinal_sim.py     # Session 5: 50-cycle longitudinal dynamics (Table 2 extension)
 │   ├── paths.py                # Shared repository-relative output path handling
+│   ├── selection_policy.py     # Shared capacity-limited applicant ranking
 │   └── run_pipeline.py         # One-command end-to-end runner
 ├── tests/
 │   ├── test_baseline_repro.py
@@ -90,6 +92,7 @@ admissions-validation-sandbox/
 │   ├── test_escalation_policy.py
 │   ├── test_make_charts.py
 │   ├── test_longitudinal_sim.py
+│   ├── test_selection_policy.py
 │   └── test_run_pipeline.py
 ├── outputs/                    # Generated CSVs and PNG charts
 ├── walkthrough.ipynb           # End-to-end narrated walkthrough & operational sensitivity sandbox
@@ -107,7 +110,8 @@ python -m pytest -v
 
 ## Limitations & Real-World Nuances
 
-- **Fixed seat capacity & yield:** Rescuing more qualified applicants via human review increases total admits in this unconstrained sandbox. At a selective university with a fixed freshman class size and yield target, lowering false negatives requires tightening the auto-admit bar or managing a waitlist (trading off FNR against FPR/over-enrollment risk).
+- **Capacity is not enrollment:** The simulation caps admitted applicants as a share of the evaluation pool, while real institutions set offer targets to account for yield, waitlists, and enrollment goals. The synthetic fixed-capacity rule is a simplified teaching model, not an enrollment forecast.
+- **Eligibility and capacity:** Applicants outside the model's top-capacity shortlist are initially ineligible; human review can change eligibility only for escalated applications. The final selection re-ranks eligible applicants by model score and never exceeds capacity. This makes review an override to the shortlist, not a way to increase class size.
 - **Idealized human review:** `src/escalation_policy.py` models human readers with a symmetric **92%** accuracy rate across cohorts. In this simulation, reviewer decisions use `true_qualified` as an oracle; actual readers do not observe ground truth. Real admissions committees experience reader fatigue, inter-rater variance, and their own cognitive biases.
 - **Synthetic context proxies:** AP offerings and work/caregiving hours are simulated signals correlated with cohort. The cohort-blind routing rule is an illustration, not evidence that these proxies or thresholds are fair, valid, or appropriate in real admissions.
 - **Longitudinal experiment:** Both regimes start from the same population and use separate seeded random streams for feature generation, reviewer decisions, and environmental shocks. Review draws therefore do not shift later feature or shock draws; applicant states still diverge as decisions compound.

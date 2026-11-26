@@ -2,6 +2,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pandas as pd
+
 
 def test_pipeline_runs_from_outside_repository(tmp_path):
     """The script entry point creates all outputs from a different working directory."""
@@ -15,6 +17,8 @@ def test_pipeline_runs_from_outside_repository(tmp_path):
             str(script),
             "--output-dir",
             str(output_dir),
+            "--capacity-fraction",
+            "0.10",
         ],
         cwd=tmp_path,
         check=True,
@@ -33,3 +37,8 @@ def test_pipeline_runs_from_outside_repository(tmp_path):
         "chart3_longitudinal_dynamics.png",
     }
     assert expected_outputs.issubset({path.name for path in output_dir.iterdir()})
+    baseline = pd.read_csv(output_dir / "baseline_applicants.csv")
+    assert baseline["pred_admit"].sum() == 300
+    tradeoff = pd.read_csv(output_dir / "escalation_tradeoff.csv")
+    assert (tradeoff["capacity_seats"] == 300).all()
+    assert (tradeoff["admitted_count"] <= 300).all()

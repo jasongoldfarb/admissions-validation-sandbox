@@ -36,6 +36,7 @@ if __package__:
         compute_true_readiness_score,
     )
     from .paths import get_output_dir
+    from .selection_policy import DEFAULT_CAPACITY_FRACTION, select_with_capacity
 else:
     from baseline_repro import (
         FRACTION_OF_PROTECTED,
@@ -47,6 +48,7 @@ else:
         compute_true_readiness_score,
     )
     from paths import get_output_dir
+    from selection_policy import DEFAULT_CAPACITY_FRACTION, select_with_capacity
 
 FEATURE_COLS = ["gpa", "test_score", "ap_courses_taken", "leadership_index"]
 DELTA_Q_POS = 0.05
@@ -212,8 +214,9 @@ def run_simulation(
     shock_std: float = 0.02,
     retrain: bool = True,
     seed: int = 42,
+    capacity_fraction: float = DEFAULT_CAPACITY_FRACTION,
 ) -> pd.DataFrame:
-    """Run a t-cycle simulation under 'baseline' or 'context_aware_hitl'."""
+    """Run a capacity-constrained simulation under baseline or context-aware review."""
     if regime not in {"baseline", "context_aware_hitl"}:
         raise ValueError(f"Unknown regime '{regime}'. Use 'baseline' or 'context_aware_hitl'.")
 
@@ -236,7 +239,10 @@ def run_simulation(
         cycle_df = compute_cycle_features(state_df, feature_rng)
         X_cur = cycle_df[FEATURE_COLS].to_numpy()
         pred_prob = clf.predict_proba(scaler.transform(X_cur))[:, 1]
-        pred_admit = (pred_prob >= 0.50).astype(int)
+        model_eligibility, target_seats = select_with_capacity(
+            pred_prob, np.ones(n_samples, dtype=bool), capacity_fraction
+        )
+        final_eligibility = model_eligibility.copy()
 
         if regime == "context_aware_hitl":
             has_constraint = (cycle_df["school_ap_cap"] <= 6) | (
@@ -249,12 +255,15 @@ def run_simulation(
         else:
             escalate_mask = np.zeros(n_samples, dtype=bool)
 
-        final_admit = pred_admit.copy()
         esc_idx = np.where(escalate_mask)[0]
         if len(esc_idx) > 0:
             true_vals = cycle_df["true_qualified"].to_numpy()[esc_idx]
             human_correct = review_rng.binomial(1, human_review_accuracy, size=len(esc_idx))
-            final_admit[esc_idx] = np.where(human_correct == 1, true_vals, 1 - true_vals)
+            final_eligibility[esc_idx] = np.where(human_correct == 1, true_vals, 1 - true_vals)
+
+        final_admit, _ = select_with_capacity(
+            pred_prob, final_eligibility, capacity_fraction
+        )
 
         y_true = cycle_df["true_qualified"].to_numpy()
         trad_mask = (cycle_df["cohort"] == "traditional").to_numpy()
@@ -274,6 +283,15 @@ def run_simulation(
                 "trad_fnr": _cohort_fnr(y_true[trad_mask], final_admit[trad_mask]),
                 "nontrad_fnr": _cohort_fnr(y_true[nontrad_mask], final_admit[nontrad_mask]),
                 "escalated_pct": float(escalate_mask.mean()),
+                "capacity_fraction": capacity_fraction,
+                "capacity_seats": target_seats,
+                "eligible_count": int(final_eligibility.sum()),
+                "admitted_count": int(final_admit.sum()),
+                "unfilled_seats": target_seats - int(final_admit.sum()),
+                "admitted_pct": float(final_admit.mean()),
+                "capacity_fill_pct": (
+                    float(final_admit.sum() / target_seats) if target_seats else 0.0
+                ),
             }
         )
 
@@ -303,9 +321,14 @@ def run_simulation(
     return pd.DataFrame(records)
 
 
-def main(output_dir: Optional[Path] = None) -> None:
-    base_df = run_simulation(regime="baseline", seed=42)
-    hitl_df = run_simulation(regime="context_aware_hitl", seed=42)
+def main(
+    output_dir: Optional[Path] = None,
+    capacity_fraction: float = DEFAULT_CAPACITY_FRACTION,
+) -> None:
+    base_df = run_simulation(regime="baseline", seed=42, capacity_fraction=capacity_fraction)
+    hitl_df = run_simulation(
+        regime="context_aware_hitl", seed=42, capacity_fraction=capacity_fraction
+    )
     results = pd.concat([base_df, hitl_df], ignore_index=True)
 
     print("=" * 76)
@@ -317,6 +340,11 @@ def main(output_dir: Optional[Path] = None) -> None:
         print(f"  Quality Gap (Trad - NonTrad): {c1['quality_gap']:+.4f} (t=1) -> {c50['quality_gap']:+.4f} (t=50)")
         print(f"  Non-Trad Wrongful Reject FNR: {c1['nontrad_fnr']:>6.1%} (t=1) -> {c50['nontrad_fnr']:>6.1%} (t=50)")
         print(f"  Overall System Accuracy:      {c1['overall_accuracy']:>6.1%} (t=1) -> {c50['overall_accuracy']:>6.1%} (t=50)")
+        print(
+            f"  Seats Filled / Target:        "
+            f"{c1['admitted_count']:,}/{c1['capacity_seats']:,} (t=1) -> "
+            f"{c50['admitted_count']:,}/{c50['capacity_seats']:,} (t=50)"
+        )
         print(f"  Mean Escalation Workload:     {sub['escalated_pct'].mean():>6.1%}")
     print("=" * 76)
 

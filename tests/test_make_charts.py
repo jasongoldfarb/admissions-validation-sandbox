@@ -20,10 +20,12 @@ def _sample_inputs() -> tuple[pd.DataFrame, pd.DataFrame]:
     tradeoff_df = pd.DataFrame(
         {
             "policy": [
-                "No Escalation (Baseline)",
+                "No Escalation (Capacity Baseline)",
                 "Context-Aware Band (AP Cap <=6 or Work >=10h: [0.04,0.65] / Else: [0.20,0.65])",
             ],
             "escalated_pct": [0.0, 0.064],
+            "admitted_count": [600, 600],
+            "capacity_seats": [600, 600],
             "overall_accuracy": [0.825, 0.855],
             "trad_fnr": [0.120, 0.084],
             "nontrad_fnr": [0.685, 0.500],

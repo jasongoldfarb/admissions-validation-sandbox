@@ -23,8 +23,10 @@ from sklearn.preprocessing import StandardScaler
 
 if __package__:
     from .paths import get_output_dir
+    from .selection_policy import DEFAULT_CAPACITY_FRACTION, select_with_capacity
 else:
     from paths import get_output_dir
+    from selection_policy import DEFAULT_CAPACITY_FRACTION, select_with_capacity
 
 # Empirical priors from INFORMSJoC/2023.0523
 FRACTION_OF_PROTECTED = 1.0 - (7.8 / 15.4)  # NCES undergraduate enrollment (~49.35%)
@@ -184,7 +186,10 @@ def summarize_metrics(df: pd.DataFrame, label_col: str = "true_qualified", pred_
     }
 
 
-def main(output_dir: Optional[Path] = None) -> None:
+def main(
+    output_dir: Optional[Path] = None,
+    capacity_fraction: float = DEFAULT_CAPACITY_FRACTION,
+) -> None:
     df = generate_applicants(n_samples=10_000, seed=42)
 
     feature_cols = ["gpa", "test_score", "ap_courses_taken", "leadership_index"]
@@ -202,7 +207,15 @@ def main(output_dir: Optional[Path] = None) -> None:
     clf.fit(X_train, train_df["historical_admit"])
 
     test_df["pred_prob"] = clf.predict_proba(X_test)[:, 1]
-    test_df["pred_admit"] = (test_df["pred_prob"] >= 0.50).astype(int)
+    model_eligibility, target_seats = select_with_capacity(
+        test_df["pred_prob"].to_numpy(),
+        np.ones(len(test_df), dtype=bool),
+        capacity_fraction,
+    )
+    test_df["model_eligible"] = model_eligibility
+    test_df["pred_admit"] = model_eligibility.astype(int)
+    test_df["capacity_fraction"] = capacity_fraction
+    test_df["capacity_seats"] = target_seats
 
     overall = summarize_metrics(test_df)
     trad = summarize_metrics(test_df[test_df["cohort"] == "traditional"])
@@ -214,6 +227,9 @@ def main(output_dir: Optional[Path] = None) -> None:
     print(f"Evaluation Holdout Sample: N = {overall['n']:,}")
     print(f"Holdout SAT Mean / SD:     {test_df['test_score'].mean():.1f} / {test_df['test_score'].std():.1f}")
     print(f"Non-Traditional Share:     {test_df['is_nontraditional'].mean():.1%}")
+    print(f"Capacity Target:           {target_seats:,} seats ({capacity_fraction:.1%})")
+    print(f"Model-Shortlisted Applicants: {int(test_df['model_eligible'].sum()):,}")
+    print(f"Seats Filled:              {int(test_df['pred_admit'].sum()):,}")
     print(f"Overall Accuracy (vs. True Readiness):      {overall['accuracy']:.1%}")
     print(f"Overall Wrongful Auto-Rejection Rate (FNR): {overall['fnr_wrongful_reject']:.1%}")
     print("-" * 64)
