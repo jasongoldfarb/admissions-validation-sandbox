@@ -125,7 +125,7 @@ The CSVs and charts in `outputs/` are checked-in reference artifacts for the REA
 
 1. **Test human review accuracy sensitivity:** Edit `human_acc` in `walkthrough.ipynb` (Section 5) or `src/escalation_policy.py` (e.g., `0.85` vs. `0.95`)—at what human review accuracy does escalating borderline cases stop improving overall accuracy?
 2. **Hidden Confounder / Omitted Variable Experiment:** Add an unmeasured **legacy / institutional-familiarity boost** into `historical_admit` without exposing it to the model. How does that shift the decision boundary and change which applicants land inside or outside the review band?
-3. **Capacity-Constrained Escalation:** Suppose human admissions readers can only review **5%** of total applications. Design a ranking or context-triggered rule to select which applications get human review first.ign a ranking or context-triggered rule to pick *which* 5% get human eyes first.
+3. **Capacity-Constrained Escalation:** Suppose human admissions readers can only review **5%** of total applications. Design a ranking or context-triggered rule to select which applications get human review first.
 
 ## Research Attribution
 
