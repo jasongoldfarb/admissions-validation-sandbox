@@ -115,7 +115,6 @@ def make_chart2(audited_df: pd.DataFrame, tradeoff_df: pd.DataFrame, out_path: P
     ctx_trad_fnr = ctx_row["trad_fnr"] * 100
     base_nontrad_fnr = base_row["nontrad_fnr"] * 100
     ctx_nontrad_fnr = ctx_row["nontrad_fnr"] * 100
-    rel_drop = (base_nontrad_fnr - ctx_nontrad_fnr) / base_nontrad_fnr * 100
 
     _set_style()
     fig, (ax_cost, ax_payoff) = plt.subplots(
@@ -188,7 +187,7 @@ def make_chart2(audited_df: pd.DataFrame, tradeoff_df: pd.DataFrame, out_path: P
     deltas = [
         f"+{ctx_acc - base_acc:.1f} pts",
         f"-{base_trad_fnr - ctx_trad_fnr:.1f} pts",
-        f"-{rel_drop:.1f}% relative",
+        f"{ctx_nontrad_fnr - base_nontrad_fnr:.1f} pts",
     ]
 
     y = np.arange(len(metrics))
@@ -279,7 +278,7 @@ def make_chart3(long_df: pd.DataFrame, out_path: Path) -> None:
     ax_gap.set_ylabel("Mean Quality Gap (Trad - NonTrad)", fontsize=10.5, fontweight="bold")
     ax_gap.spines["top"].set_visible(False)
     ax_gap.spines["right"].set_visible(False)
-    ax_gap.legend(loc="upper left", frameon=True, fontsize=9.2)
+    ax_gap.legend(loc="upper right", frameon=True, fontsize=9.2)
 
     # --- RIGHT PANEL: Non-Traditional Wrongful Rejection Rate (FNR) ---
     ax_fnr.plot(
