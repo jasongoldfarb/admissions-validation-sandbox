@@ -1,15 +1,15 @@
 """
-Session 1: Baseline Admissions Simulation & Screening Model
-Anchored to the empirical priors in Ray, Padmanabhan, and Bouayad
-(INFORMS Journal on Computing / arXiv:2304.06901, repo INFORMSJoC/2023.0523):
-  - NCES protected/underrepresented share: 1 - 7.8/15.4 (~49.4%)
-  - College Board SAT distribution: mean 1030, std 235 (rounded to 10)
-  - Equal underlying quality across groups: N(0.5, 0.1)
-  - Tier-1 selective admissions cutoff: top 20% (Tau1 = 20)
+Session 1: Synthetic Single-Institution Admissions Screener
 
-Translates the paper's group-level evaluation noise gap into concrete
-flattened-context features (school AP caps, outside work/caregiving hours,
-upward grade trajectory) to test human-in-the-loop escalation.
+Uses selected empirical benchmarks and modeling assumptions discussed by
+Ray, Padmanabhan, and Bouayad (INFORMS Journal on Computing,
+arXiv:2304.06901; code repository INFORMSJoC/2023.0523). This is an
+exploratory adaptation, not a reproduction of their multi-university model.
+
+The applicant pool, historical decisions, readiness labels, and contextual
+signals are synthetic. School AP caps, outside work/caregiving hours, and
+upward grade trajectories are sandbox-specific features for exploring
+context-aware review.
 """
 
 from pathlib import Path
@@ -28,13 +28,13 @@ else:
     from paths import get_output_dir
     from selection_policy import DEFAULT_CAPACITY_FRACTION, select_with_capacity
 
-# Empirical priors from INFORMSJoC/2023.0523
+# Selected empirical benchmarks and modeling assumptions from the paper/repo.
 FRACTION_OF_PROTECTED = 1.0 - (7.8 / 15.4)  # NCES undergraduate enrollment (~49.35%)
 SAT_MEAN = 1030.0                            # College Board median/mean
 SAT_STD = 235.0                              # College Board std dev
 QUALITY_MU = 0.5                             # Equal underlying quality mean (P0 = P1)
 QUALITY_SIGMA = 0.1                          # Equal underlying quality std (P0 = P1)
-TIER1_ADMIT_RATE = 0.20                      # Tau1 = 20% selective tier cutoff
+TIER1_ADMIT_RATE = 0.20                      # Synthetic readiness qualification rate; not seat capacity
 
 
 def compute_true_readiness_score(
@@ -57,7 +57,7 @@ def compute_true_readiness_score(
 
 
 def generate_applicants(n_samples: int = 10_000, seed: int = 42) -> pd.DataFrame:
-    """Simulate applicants using paper priors + flattened qualitative context."""
+    """Simulate applicants using selected research-grounded priors and sandbox-specific context."""
     rng = np.random.default_rng(seed)
 
     # Cohort split anchored to NCES share (~49.4% non-traditional / underrepresented)

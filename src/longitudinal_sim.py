@@ -1,20 +1,26 @@
 """
-Session 5: Longitudinal Multi-Cycle Dynamics Simulation (Table 2 Extension)
-Extends the single-cycle admissions audit to t = 50 recurring selection cycles
-using the dynamic ecosystem parameters from Ray, Padmanabhan, and Bouayad
-(INFORMS Journal on Computing / arXiv:2304.06901, Table 2):
+Session 5: Sandbox-Specific Longitudinal Admissions Experiment
+
+Adds a 50-cycle evolving, single-institution experiment to this training
+sandbox. It uses selected research-grounded population assumptions and
+quality-update values, but is not the paper's multi-university simulation.
+Unlike the original repository's scenario runs across repeated random seeds,
+this experiment updates applicant quality and retrains the screener over time.
+
+Sandbox defaults:
 - n = 1,000 individuals
 - f = 1 - 7.8/15.4 (~49.4% non-traditional / protected share)
 - t = 50 decision cycles
-- Tau = 0.80 (top 20% selective approval threshold)
-- Delta Q+ = +0.05 (reward for admitted & qualified)
-- Delta Q- = -0.05 (penalty for admitted & unqualified)
+- readiness qualification = top 20% of each cycle (separate from seat capacity)
+- Delta Q+ = +0.05 for admitted and qualified applicants
+- Delta Q- = -0.05 for admitted and unqualified applicants
 
 Compares two parallel regimes starting from the exact same initial population:
 1. Automated Baseline (0% HITL)
 2. Context-Aware Escalation (cohort-blind observable constraints + 92% HITL)
 
-Writes cycle-by-cycle metrics to outputs/longitudinal_dynamics.csv.
+Writes cycle-by-cycle metrics to outputs/longitudinal_dynamics.csv. The
+simulated reviewer uses hidden readiness labels as an idealized proxy.
 """
 
 from pathlib import Path

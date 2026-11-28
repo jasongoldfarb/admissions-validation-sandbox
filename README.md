@@ -10,14 +10,17 @@ Built as a low-friction **winter-break / New Year's coding sandbox** for data sc
 
 ## Empirical Priors & Simulation Grounding
 
-The applicant generator in `src/baseline_repro.py` and the 50-cycle extension in `src/longitudinal_sim.py` are anchored to the empirical priors and Table 2 parameters used in **Ray, Padmanabhan, and Bouayad (INFORMS Journal on Computing, `INFORMSJoC/2023.0523`)**:
+This sandbox is inspired by **Ray, Padmanabhan, and Bouayad's systemic fairness research** and uses selected empirical priors reported in that work. It is not a reproduction of their simulation. The original code models students applying to multiple universities across selectivity tiers, with SAT screening and noisy, weighted academic and non-academic evaluations. This sandbox instead models one capacity-constrained applicant pool, a logistic-regression screener trained on synthetic historical decisions, and context-aware human-review scenarios.
+
+The applicant generator in `src/baseline_repro.py` uses selected assumptions grounded in that research:
 - **Subgroup share (NCES):** `1 - 7.8 / 15.4` (~49.4% non-traditional / underrepresented).
 - **SAT distribution (College Board):** Mean `1030`, SD `235`, rounded to the nearest 10.
 - **Equal underlying talent:** Identical academic and non-academic quality distributions (`N(0.5, 0.1)`) across cohorts.
-- **Readiness benchmark:** Top `20%` labeled qualified (`Tau1 = 20` Tier-1 cutoff); this ground-truth label is distinct from the configurable seat capacity.
-- **Longitudinal dynamics (Table 2):** `n = 1,000` individuals, `t = 50` recurring selection cycles, `∆Q+ = +0.05` (reward for admitted & qualified), `∆Q- = -0.05` (penalty for admitted & unqualified).
+- **Sandbox qualification benchmark:** Top `20%` labeled qualified by the synthetic readiness score. This ground-truth label is a sandbox design choice, distinct from the paper's university-tier assignment and from this project's configurable seat capacity.
 
-To test human-in-the-loop escalation at the single-institution level, the sandbox translates the paper's group-level evaluation noise gap into concrete flattened-context variables (school AP caps, outside work/caregiving hours, and upward grade trajectories). Both the single-cycle and longitudinal examples use the same readiness definition: latent academic and non-academic quality, AP utilization, outside work/care hours, upward trajectory, and a noise term, with the top 20% labeled qualified each cycle.
+The sandbox's own longitudinal experiment uses `n = 1,000`, `t = 50` cycles, `∆Q+ = +0.05` for admitted and qualified applicants, and `∆Q- = -0.05` for admitted and unqualified applicants. These are parameters of this added experiment, not evidence that its evolving simulation reproduces the paper's model.
+
+To test human-in-the-loop escalation in this single-institution setting, the sandbox represents unequal access through synthetic context variables (school AP caps, outside work/caregiving hours, and upward grade trajectories). Both examples use the same readiness definition: latent academic and non-academic quality, AP utilization, outside work/care hours, upward trajectory, and a noise term, with the top 20% labeled qualified each cycle. The 50-cycle simulation is an extension created for this sandbox: it models evolving applicant quality and screener retraining across cycles. The original repository runs scenario variants across repeated random seeds; those runs are not an evolving 50-cycle process.
 
 ## Key Findings (Simulated Holdout, N = 3,000; Capacity = 20%)
 
@@ -82,7 +85,7 @@ admissions-validation-sandbox/
 │   ├── audit_borderline.py     # Session 2: Score-zone slice & flattened-context audit
 │   ├── escalation_policy.py    # Session 3: Observable context-proxy review band simulation
 │   ├── make_charts.py          # Session 4: Generate PNG visuals from simulation outputs
-│   ├── longitudinal_sim.py     # Session 5: 50-cycle longitudinal dynamics (Table 2 extension)
+│   ├── longitudinal_sim.py     # Sandbox-added 50-cycle evolving simulation
 │   ├── paths.py                # Shared repository-relative output path handling
 │   ├── selection_policy.py     # Shared capacity-limited applicant ranking
 │   └── run_pipeline.py         # One-command end-to-end runner
@@ -129,6 +132,6 @@ The CSVs and charts in `outputs/` are checked-in reference artifacts for the REA
 
 ## Research Attribution
 
-This sandbox is inspired by and anchored to the empirical priors in the systemic fairness research of **Arindam Ray, Balaji Padmanabhan, and Lina Bouayad**:
+This sandbox is inspired by the systemic fairness research of **Arindam Ray, Balaji Padmanabhan, and Lina Bouayad**. It uses selected research-grounded priors but does not reproduce the paper's multi-university simulation:
 - *INFORMS Journal on Computing* simulation repository: https://github.com/INFORMSJoC/2023.0523
 - *Systemic Fairness* (`arXiv:2304.06901`): https://arxiv.org/pdf/2304.06901.pdf

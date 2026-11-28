@@ -2,6 +2,8 @@
 
 Pipeline modules for the Selective Admissions Model Validation & Escalation Sandbox. Run all stages with `python src/run_pipeline.py`; individual scripts can also be run directly. Outputs default to the repository's `outputs/` directory even when invoked from another working directory.
 
+This project is inspired by Ray, Padmanabhan, and Bouayad's systemic fairness research and uses selected empirical priors from that work; it does not reproduce the paper's multi-university simulation. The original code models applications across universities and tiers, SAT screening, and noisy weighted evaluations. This sandbox instead models a single capacity-constrained pool with a logistic-regression screener and context-aware review.
+
 The single-cycle and longitudinal simulations share the readiness scorer in `baseline_repro.py`: latent academic and non-academic quality, AP utilization, work/care hours, upward grade trajectory, and seeded noise. Qualification is assigned to the top 20% of each simulated pool or cycle.
 
 Admissions are capacity-constrained separately from that readiness label. The default target is 20% of the applicant pool. Model probabilities rank applicants; the baseline shortlists the top capacity-sized group. HITL can change eligibility for escalated applicants before a final score ranking selects up to the seat cap. Score ties retain input order; if too few applicants remain eligible, seats are left unfilled.
@@ -15,7 +17,7 @@ Admissions are capacity-constrained separately from that readiness label. The de
 ## 1. `baseline_repro.py`
 
 ### Purpose & Pipeline Role
-Generates the simulated applicant pool anchored to the empirical priors in Ray, Padmanabhan, and Bouayad (*INFORMS Journal on Computing*, `INFORMSJoC/2023.0523`), trains a baseline logistic regression screener on biased historical admissions labels, and evaluates overall vs. cohort-level performance against ground-truth readiness.
+Generates the simulated applicant pool using selected empirical priors from Ray, Padmanabhan, and Bouayad (*INFORMS Journal on Computing*, `INFORMSJoC/2023.0523`), trains a baseline logistic regression screener on synthetic historical admissions labels, and evaluates overall vs. cohort-level performance against ground-truth readiness. This is a new single-institution training model, not an implementation of the paper's multi-university algorithm.
 
 - **Inputs:** None (self-contained generator with fixed seed `42`).
 - **Outputs:** `outputs/baseline_applicants.csv` (3,000-row stratified holdout set with `pred_prob`, initial `model_eligible` shortlist, and capacity-limited `pred_admit`).
@@ -128,7 +130,7 @@ python src/make_charts.py
 ## 5. `longitudinal_sim.py`
 
 ### Purpose & Pipeline Role
-Compares automated selection and context-aware human review over 50 recurring cycles, updating latent quality and retraining the screener on observed outcomes.
+Adds this sandbox's own 50-cycle experiment comparing automated selection and context-aware human review, updating latent quality and retraining the screener on observed outcomes. It uses a 1,000-person pool and quality updates of `+0.05` for admitted and qualified applicants and `-0.05` for admitted and unqualified applicants. These are parameters of this added experiment; the original repository's scenario runs across 50 random seeds are not an evolving 50-cycle process.
 
 - **Inputs:** None; initializes the population from a fixed seed.
 - **Outputs:** `outputs/longitudinal_dynamics.csv` (100 rows: 50 cycles for each policy).
